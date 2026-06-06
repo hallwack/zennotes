@@ -104,7 +104,17 @@ export const IPC = {
   CLI_INSTALL: 'cli:install',
   CLI_UNINSTALL: 'cli:uninstall',
   RAYCAST_GET_STATUS: 'raycast:get-status',
-  RAYCAST_INSTALL: 'raycast:install'
+  RAYCAST_INSTALL: 'raycast:install',
+  SHARE_GET_ACCOUNT: 'share:get-account',
+  SHARE_BEGIN_CONNECT: 'share:begin-connect',
+  SHARE_SUBMIT_CODE: 'share:submit-code',
+  SHARE_DISCONNECT: 'share:disconnect',
+  SHARE_GET_SERVER_URL: 'share:get-server-url',
+  SHARE_SET_SERVER_URL: 'share:set-server-url',
+  SHARE_PUBLISH: 'share:publish',
+  SHARE_UNPUBLISH: 'share:unpublish',
+  SHARE_LIST: 'share:list',
+  SHARE_ON_AUTH_RESULT: 'share:on-auth-result'
 } as const
 
 export interface TikzRenderResponse {
@@ -527,4 +537,55 @@ export interface VaultChangeEvent {
   path: string
   folder: NoteFolder
   scope?: VaultChangeScope
+}
+
+/** Default server notes are shared to. Overridable in Settings → Sharing. */
+export const DEFAULT_SHARE_SERVER_URL = 'https://zennotes.org'
+
+export interface ShareAccount {
+  connected: boolean
+  name: string | null
+  email: string | null
+  serverUrl: string
+}
+
+export interface ShareRecord {
+  id: number
+  slug: string
+  url: string
+  title?: string | null
+  notePath?: string | null
+  viewCount?: number
+  updatedAt?: string | null
+}
+
+/** A pending browser connect handoff (state nonce + the URL we opened). */
+export interface ShareConnectPending {
+  state: string
+  url: string
+}
+
+export interface ShareAuthResult {
+  ok: boolean
+  account?: ShareAccount
+  error?: string
+}
+
+export interface SharePublishAsset {
+  /** The literal markdown URL string used in the note (the viewer's lookup key). */
+  ref: string
+  /** Resolved vault-relative path main reads the bytes from. */
+  vaultRelPath: string
+}
+
+export interface SharePublishRequest {
+  notePath: string
+  title: string
+  /** Frontmatter-stripped markdown body. */
+  markdown: string
+  /** Raw ```tikz fence bodies, deduped; main pre-renders them to SVG. */
+  tikzSources: string[]
+  assets: SharePublishAsset[]
+  /** Present when re-publishing an existing share (PUT instead of POST). */
+  existingShareId?: number | null
 }

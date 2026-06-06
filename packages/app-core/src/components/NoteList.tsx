@@ -12,6 +12,7 @@ import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { ResizeHandle } from './ResizeHandle'
 import { confirmMoveToTrash } from '../lib/confirm-trash'
 import { buildMoveNotePrompt, parseMoveNoteTarget } from '../lib/move-note'
+import { readShareFrontmatter } from '../lib/note-frontmatter'
 import { extractTags } from '../lib/tags'
 import { setDragPayload } from '../lib/dnd'
 import { promptApp } from '../lib/prompt-requests'
@@ -238,6 +239,30 @@ export function NoteList(): JSX.Element {
     })
     if (canRevealInFileManager) {
       items.push({ label: 'Reveal in File Manager', onSelect: onReveal })
+    }
+
+    // Note sharing (desktop-only in v1). Shared state is read from the
+    // note body when it's loaded; the share actions re-read from disk
+    // either way, so acting on a never-opened note works too.
+    if (n.folder !== 'trash' && window.zen.getAppInfo().runtime === 'desktop') {
+      const body = useStore.getState().noteContents[n.path]?.body
+      const shared = !!body && readShareFrontmatter(body).shareId !== null
+      items.push({ kind: 'separator' })
+      items.push({
+        label: shared ? 'Update Shared Note…' : 'Share Note…',
+        onSelect: async () => useStore.getState().shareActiveNote(n.path)
+      })
+      if (shared) {
+        items.push({
+          label: 'Copy Share Link',
+          onSelect: async () => useStore.getState().copyShareLink(n.path)
+        })
+        items.push({
+          label: 'Stop Sharing',
+          danger: true,
+          onSelect: async () => useStore.getState().unshareActiveNote(n.path)
+        })
+      }
     }
     items.push({ kind: 'separator' })
 

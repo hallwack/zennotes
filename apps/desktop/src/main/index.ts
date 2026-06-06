@@ -33,6 +33,7 @@ import type {
   RemoteWorkspaceProfile,
   RemoteWorkspaceProfileInput,
   ServerCapabilities,
+  SharePublishRequest,
   VaultSettings,
   VaultChangeEvent,
   VaultInfo,
@@ -110,6 +111,17 @@ import { WindowVaultRegistry } from './window-vaults'
 import { renderTikz } from './tikz'
 import { RemoteServerClient } from './remote/server-client'
 import {
+  beginShareConnect,
+  completeShareConnect,
+  disconnectShareAccount,
+  getShareAccount,
+  getShareServerUrl,
+  setShareServerUrl,
+  requireShareClient,
+  type ShareAccountDeps
+} from './share/share-account'
+import { publishShare, readLocalVaultAsset } from './share/share-service'
+import {
   getMcpClientStatuses,
   getMcpServerRuntime,
   installMcpForClient,
@@ -141,6 +153,7 @@ import {
 } from '../mcp/instructions-store'
 import { recordMainPerf } from './perf'
 import {
+  parseAuthDeepLink,
   parseOpenNoteDeepLink,
   ZENNOTES_DEEP_LINK_SCHEME
 } from './deep-links'
@@ -314,7 +327,44 @@ async function flushPendingFloatingNoteRequests(): Promise<void> {
   }
 }
 
+const shareAccountDeps: ShareAccountDeps = {
+  getUserDataPath: () => app.getPath('userData'),
+  getClientVersion: () => app.getVersion(),
+  openExternal: (url) => shell.openExternal(url)
+}
+
+function broadcastShareAuthResult(result: {
+  ok: boolean
+  account?: unknown
+  error?: string
+}): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(IPC.SHARE_ON_AUTH_RESULT, result)
+  }
+}
+
+function handleShareAuthDeepLink(rawUrl: string): boolean {
+  const request = parseAuthDeepLink(rawUrl)
+  if (!request) return false
+
+  void (async () => {
+    try {
+      const account = await completeShareConnect(shareAccountDeps, request.code, request.state)
+      broadcastShareAuthResult({ ok: true, account })
+    } catch (error) {
+      broadcastShareAuthResult({
+        ok: false,
+        error: error instanceof Error ? error.message : 'Connecting your account failed.'
+      })
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) focusWindow(mainWindow)
+  })()
+
+  return true
+}
+
 function handleExternalOpenUrl(rawUrl: string): boolean {
+  if (handleShareAuthDeepLink(rawUrl)) return true
   const request = parseOpenNoteDeepLink(rawUrl)
   if (!request) return false
   if (request.target === 'window') queueFloatingNoteRequest(request.path)
@@ -2526,6 +2576,42 @@ function registerIpc(): void {
     const result = await renderTikz(source)
     if (result.ok) return { ok: true, svg: result.svg }
     return { ok: false, error: result.error }
+  })
+
+  handle(IPC.SHARE_GET_ACCOUNT, async () => getShareAccount(shareAccountDeps))
+  handle(IPC.SHARE_BEGIN_CONNECT, async () => beginShareConnect(shareAccountDeps))
+  handle(IPC.SHARE_SUBMIT_CODE, async (_e, code: string) =>
+    completeShareConnect(shareAccountDeps, code, null)
+  )
+  handle(IPC.SHARE_DISCONNECT, async () => disconnectShareAccount(shareAccountDeps))
+  handle(IPC.SHARE_GET_SERVER_URL, async () => getShareServerUrl(shareAccountDeps))
+  handle(IPC.SHARE_SET_SERVER_URL, async (_e, url: string) =>
+    setShareServerUrl(shareAccountDeps, url)
+  )
+  handle(IPC.SHARE_PUBLISH, async (_e, request: SharePublishRequest) => {
+    const vault = requireVault()
+    const remote = isRemoteWorkspaceActive() ? requireRemoteWorkspaceClient() : null
+    return publishShare(
+      {
+        ...shareAccountDeps,
+        readAssetBytes: async (vaultRelPath: string) => {
+          if (remote) {
+            const response = await remote.fetchAssetResponse(vaultRelPath)
+            return new Uint8Array(await response.arrayBuffer())
+          }
+          return readLocalVaultAsset(vault.root, vaultRelPath)
+        }
+      },
+      request
+    )
+  })
+  handle(IPC.SHARE_UNPUBLISH, async (_e, shareId: number) => {
+    const client = await requireShareClient(shareAccountDeps)
+    await client.deleteShare(shareId)
+  })
+  handle(IPC.SHARE_LIST, async () => {
+    const client = await requireShareClient(shareAccountDeps)
+    return client.listShares()
   })
 
   handle(IPC.MCP_RUNTIME, async () => await getMcpServerRuntime())

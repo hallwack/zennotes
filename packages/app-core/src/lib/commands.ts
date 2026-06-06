@@ -9,6 +9,7 @@
 import { isTagsViewActive, isTasksViewActive, isTrashViewActive, useStore } from '../store'
 import { confirmApp } from './confirm-requests'
 import { promptApp } from './prompt-requests'
+import { readShareFrontmatter } from './note-frontmatter'
 import { buildMoveNotePrompt, parseMoveNoteTarget } from './move-note'
 import { focusPaneInDirection } from './pane-nav'
 import { findLeaf } from './pane-layout'
@@ -70,6 +71,12 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
   }
   const openExternal = (url: string): void => {
     window.open(url, '_blank')
+  }
+  // Sharing publishes through the main process; desktop-only in v1.
+  const sharingAvailable = (): boolean => window.zen.getAppInfo().runtime === 'desktop'
+  const activeNoteIsShared = (): boolean => {
+    const body = getState().activeNote?.body
+    return !!body && readShareFrontmatter(body).shareId !== null
   }
   const cmds: Command[] = []
 
@@ -252,6 +259,38 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       run: async () => {
         await getState().exportActiveNotePdf()
       }
+    },
+    {
+      id: 'share.publish',
+      title: 'Share Note…',
+      category: 'Note',
+      keywords: 'publish share link public web url',
+      when: () => !!getState().activeNote && sharingAvailable(),
+      run: () => getState().shareActiveNote()
+    },
+    {
+      id: 'share.copy-link',
+      title: 'Copy Share Link',
+      category: 'Note',
+      keywords: 'share url clipboard public',
+      when: () => activeNoteIsShared() && sharingAvailable(),
+      run: () => getState().copyShareLink()
+    },
+    {
+      id: 'share.open',
+      title: 'Open Share in Browser',
+      category: 'Note',
+      keywords: 'share web public view',
+      when: () => activeNoteIsShared() && sharingAvailable(),
+      run: () => getState().openShareInBrowser()
+    },
+    {
+      id: 'share.unpublish',
+      title: 'Stop Sharing Note',
+      category: 'Note',
+      keywords: 'unshare unpublish delete share private',
+      when: () => activeNoteIsShared() && sharingAvailable(),
+      run: () => getState().unshareActiveNote()
     },
     {
       id: 'note.copy-path',

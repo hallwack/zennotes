@@ -742,6 +742,18 @@ function registerVimNoteCommands(): void {
     void useStore.getState().openTrashView()
   })
 
+  // Note sharing — publish (or update) the active note, copy its public
+  // link, or take it down. Sharing is desktop-only in v1.
+  Vim.defineEx('share', 'share', () => {
+    void useStore.getState().shareActiveNote()
+  })
+  Vim.defineEx('unshare', 'unshare', () => {
+    void useStore.getState().unshareActiveNote()
+  })
+  Vim.defineEx('sharelink', 'sharelink', () => {
+    void useStore.getState().copyShareLink()
+  })
+
   // Heading fold helpers — wrap CodeMirror's commands so they work on
   // whichever pane currently owns the editor. `:fold` / `:unfold` act
   // on the current heading; `:foldall` / `:unfoldall` cover the whole
@@ -840,7 +852,10 @@ const MANUAL_EX_NAMES = new Set([
   'wall',
   'wa',
   'help',
-  'h'
+  'h',
+  'share',
+  'unshare',
+  'sharelink'
 ])
 
 function commandIdToExName(id: string): string {

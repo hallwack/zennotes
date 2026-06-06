@@ -15,6 +15,7 @@ import type {
   RemoteWorkspaceProfile,
   RemoteWorkspaceProfileInput,
   ServerCapabilities,
+  ShareAccount,
   VaultSettings,
   VaultTextSearchBackendPreference,
   VaultChangeEvent,
@@ -42,8 +43,15 @@ import {
 import { DEFAULT_THEME_ID, THEMES, type ThemeFamily, type ThemeMode } from './lib/themes'
 import { formatMarkdown } from './lib/format-markdown'
 import { confirmMoveToTrash } from './lib/confirm-trash'
+import { confirmApp } from './lib/confirm-requests'
 import { pickServerDirectoryApp } from './lib/server-directory-picker-requests'
 import { promptApp } from './lib/prompt-requests'
+import {
+  readShareFrontmatter,
+  removeShareFrontmatter,
+  upsertShareFrontmatter
+} from './lib/note-frontmatter'
+import { buildSharePayload } from './lib/share-payload'
 import {
   buildNoteDestinationPrompt,
   buildTemplateDestinationPrompt,
@@ -1611,6 +1619,17 @@ interface Store {
   archiveActive: () => Promise<void>
   unarchiveActive: () => Promise<void>
   exportActiveNotePdf: () => Promise<void>
+  /** Connected zennotes.org account state (null until first refresh). */
+  shareAccount: ShareAccount | null
+  refreshShareAccount: () => Promise<void>
+  connectShareAccount: () => Promise<void>
+  disconnectShareAccount: () => Promise<void>
+  setShareServerUrl: (url: string) => Promise<void>
+  /** Publish the note (or update its existing share). Defaults to the active note. */
+  shareActiveNote: (path?: string) => Promise<void>
+  copyShareLink: (path?: string) => Promise<void>
+  unshareActiveNote: (path?: string) => Promise<void>
+  openShareInBrowser: (path?: string) => Promise<void>
   setSearchOpen: (open: boolean) => void
   setVaultTextSearchOpen: (open: boolean) => void
   setCommandPaletteOpen: (open: boolean, mode?: CommandPaletteInitialMode) => void
@@ -2106,6 +2125,47 @@ async function prefetchInitialVisibleNotes(state: Store): Promise<void> {
   scheduleBackgroundPrefetch()
 }
 
+/** Strip Electron's "Error invoking remote method …" prefix from IPC errors. */
+function shareErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  return raw.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, '')
+}
+
+/**
+ * Load the freshest body for a note being shared: persists in-memory
+ * edits first when the note is open, otherwise reads straight from the
+ * vault (context menus can share notes that were never opened).
+ */
+async function loadShareNoteBody(
+  get: () => Store,
+  path: string,
+  options: { persist?: boolean } = {}
+): Promise<{ title: string; body: string }> {
+  const open = get().noteContents[path]
+  if (open) {
+    if (options.persist !== false) {
+      await get().persistNote(path)
+      if (get().noteDirty[path]) {
+        throw new Error('Could not save the note before sharing it.')
+      }
+    }
+    const current = get().noteContents[path] ?? open
+    return { title: current.title, body: current.body }
+  }
+  const note = await window.zen.readNote(path)
+  return { title: note.title, body: note.body }
+}
+
+/** Write a share-frontmatter change back, through the editor when open. */
+async function writeShareNoteBody(get: () => Store, path: string, body: string): Promise<void> {
+  if (get().noteContents[path]) {
+    get().updateNoteBody(path, body)
+    await get().persistNote(path)
+  } else {
+    await window.zen.writeNote(path, body)
+  }
+}
+
 export const useStore = create<Store>((set, get) => {
   const selectNoteImpl = async (
     relPath: string | null,
@@ -2474,6 +2534,7 @@ export const useStore = create<Store>((set, get) => {
   noteForwardstack: [],
   pendingJumpLocation: null,
   loadingNote: false,
+  shareAccount: null,
   searchOpen: false,
   vaultTextSearchOpen: false,
   commandPaletteOpen: false,
@@ -3630,6 +3691,172 @@ export const useStore = create<Store>((set, get) => {
       window.alert(
         err instanceof Error ? err.message : 'Could not export the note as a PDF.'
       )
+    }
+  },
+
+  refreshShareAccount: async () => {
+    try {
+      set({ shareAccount: await window.zen.shareGetAccount() })
+    } catch {
+      set({ shareAccount: null })
+    }
+  },
+
+  connectShareAccount: async () => {
+    try {
+      await window.zen.shareBeginConnect()
+    } catch (err) {
+      window.alert(shareErrorMessage(err))
+    }
+  },
+
+  disconnectShareAccount: async () => {
+    const confirmed = await confirmApp({
+      title: 'Disconnect your ZenNotes account?',
+      description:
+        'Already-shared notes stay published; you just need to reconnect before sharing or updating notes again.',
+      confirmLabel: 'Disconnect',
+      danger: true
+    })
+    if (!confirmed) return
+    try {
+      set({ shareAccount: await window.zen.shareDisconnect() })
+    } catch (err) {
+      window.alert(shareErrorMessage(err))
+    }
+  },
+
+  setShareServerUrl: async (url) => {
+    try {
+      await window.zen.shareSetServerUrl(url)
+      await get().refreshShareAccount()
+    } catch (err) {
+      window.alert(shareErrorMessage(err))
+    }
+  },
+
+  shareActiveNote: async (pathArg) => {
+    const path = pathArg ?? get().selectedPath
+    if (!path) return
+
+    try {
+      const account = await window.zen.shareGetAccount()
+      if (!account.connected) {
+        const connect = await confirmApp({
+          title: 'Connect your ZenNotes account',
+          description: `Sharing publishes notes to ${account.serverUrl}. Connect your account in the browser first — then run Share again.`,
+          confirmLabel: 'Connect via Browser'
+        })
+        if (connect) await get().connectShareAccount()
+        return
+      }
+
+      const note = await loadShareNoteBody(get, path)
+      const existing = readShareFrontmatter(note.body)
+      const numericShareId = existing.shareId !== null ? Number(existing.shareId) : NaN
+      const isUpdate = Number.isFinite(numericShareId)
+
+      const confirmed = await confirmApp({
+        title: isUpdate ? 'Update the shared note?' : 'Share this note publicly?',
+        description: isUpdate
+          ? 'The public page will be replaced with the current contents of this note.'
+          : `Anyone with the link can read “${note.title}”. It will be published to ${account.serverUrl}.`,
+        confirmLabel: isUpdate ? 'Update Share' : 'Share Note'
+      })
+      if (!confirmed) return
+
+      const payload = buildSharePayload(
+        { path, title: note.title, body: note.body },
+        get().assetFiles
+      )
+      const record = await window.zen.sharePublish({
+        notePath: payload.notePath,
+        title: payload.title,
+        markdown: payload.markdown,
+        tikzSources: payload.tikzSources,
+        assets: payload.assets,
+        existingShareId: isUpdate ? numericShareId : null
+      })
+
+      const nextBody = upsertShareFrontmatter(note.body, {
+        shareId: String(record.id),
+        shareUrl: record.url
+      })
+      if (nextBody !== note.body) {
+        await writeShareNoteBody(get, path, nextBody)
+      }
+
+      window.zen.clipboardWriteText(record.url)
+      const openNow = await confirmApp({
+        title: isUpdate ? 'Share updated' : 'Note shared',
+        description: `${record.url}\n\nThe link has been copied to your clipboard.`,
+        confirmLabel: 'Open in Browser',
+        cancelLabel: 'Done'
+      })
+      if (openNow) window.open(record.url, '_blank')
+    } catch (err) {
+      console.error('shareActiveNote failed', err)
+      window.alert(shareErrorMessage(err))
+    }
+  },
+
+  copyShareLink: async (pathArg) => {
+    const path = pathArg ?? get().selectedPath
+    if (!path) return
+    try {
+      const note = await loadShareNoteBody(get, path, { persist: false })
+      const { shareUrl } = readShareFrontmatter(note.body)
+      if (!shareUrl) {
+        await get().shareActiveNote(path)
+        return
+      }
+      window.zen.clipboardWriteText(shareUrl)
+    } catch (err) {
+      window.alert(shareErrorMessage(err))
+    }
+  },
+
+  unshareActiveNote: async (pathArg) => {
+    const path = pathArg ?? get().selectedPath
+    if (!path) return
+
+    try {
+      const note = await loadShareNoteBody(get, path)
+      const { shareId } = readShareFrontmatter(note.body)
+      if (shareId === null) return
+
+      const confirmed = await confirmApp({
+        title: 'Stop sharing this note?',
+        description: 'The public link will stop working immediately.',
+        confirmLabel: 'Stop Sharing',
+        danger: true
+      })
+      if (!confirmed) return
+
+      const numericShareId = Number(shareId)
+      if (Number.isFinite(numericShareId)) {
+        await window.zen.shareUnpublish(numericShareId)
+      }
+
+      const nextBody = removeShareFrontmatter(note.body)
+      if (nextBody !== note.body) {
+        await writeShareNoteBody(get, path, nextBody)
+      }
+    } catch (err) {
+      console.error('unshareActiveNote failed', err)
+      window.alert(shareErrorMessage(err))
+    }
+  },
+
+  openShareInBrowser: async (pathArg) => {
+    const path = pathArg ?? get().selectedPath
+    if (!path) return
+    try {
+      const note = await loadShareNoteBody(get, path, { persist: false })
+      const { shareUrl } = readShareFrontmatter(note.body)
+      if (shareUrl) window.open(shareUrl, '_blank')
+    } catch (err) {
+      window.alert(shareErrorMessage(err))
     }
   },
 

@@ -36,6 +36,11 @@ import type {
   RemoteWorkspaceProfileInput,
   ServerCapabilities,
   ServerSessionStatus,
+  ShareAccount,
+  ShareAuthResult,
+  ShareConnectPending,
+  SharePublishRequest,
+  ShareRecord,
   VaultChangeEvent,
   VaultDemoTourResult,
   VaultInfo,
@@ -459,7 +464,27 @@ const api: ZenBridge = {
   raycastInstall: (): Promise<RaycastExtensionStatus> =>
     ipcRenderer.invoke(IPC.RAYCAST_INSTALL),
   clipboardWriteText: (text: string): void => clipboard.writeText(text),
-  clipboardReadText: (): string => clipboard.readText()
+  clipboardReadText: (): string => clipboard.readText(),
+
+  shareGetAccount: (): Promise<ShareAccount> => ipcRenderer.invoke(IPC.SHARE_GET_ACCOUNT),
+  shareBeginConnect: (): Promise<ShareConnectPending> =>
+    ipcRenderer.invoke(IPC.SHARE_BEGIN_CONNECT),
+  shareSubmitCode: (code: string): Promise<ShareAccount> =>
+    ipcRenderer.invoke(IPC.SHARE_SUBMIT_CODE, code),
+  shareDisconnect: (): Promise<ShareAccount> => ipcRenderer.invoke(IPC.SHARE_DISCONNECT),
+  shareGetServerUrl: (): Promise<string> => ipcRenderer.invoke(IPC.SHARE_GET_SERVER_URL),
+  shareSetServerUrl: (url: string): Promise<string> =>
+    ipcRenderer.invoke(IPC.SHARE_SET_SERVER_URL, url),
+  sharePublish: (request: SharePublishRequest): Promise<ShareRecord> =>
+    ipcRenderer.invoke(IPC.SHARE_PUBLISH, request),
+  shareUnpublish: (shareId: number): Promise<void> =>
+    ipcRenderer.invoke(IPC.SHARE_UNPUBLISH, shareId),
+  shareList: (): Promise<ShareRecord[]> => ipcRenderer.invoke(IPC.SHARE_LIST),
+  onShareAuthResult: (cb: (result: ShareAuthResult) => void): (() => void) => {
+    const listener = (_: unknown, result: ShareAuthResult): void => cb(result)
+    ipcRenderer.on(IPC.SHARE_ON_AUTH_RESULT, listener)
+    return () => ipcRenderer.removeListener(IPC.SHARE_ON_AUTH_RESULT, listener)
+  }
 }
 
 export type ZenApi = ZenBridge

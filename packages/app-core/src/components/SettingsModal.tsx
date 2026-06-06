@@ -58,6 +58,7 @@ type SettingsCategoryId =
   | 'typography'
   | 'vault'
   | 'templates'
+  | 'sharing'
   | 'mcp'
   | 'cli'
   | 'about'
@@ -1881,6 +1882,38 @@ export function SettingsModal(): JSX.Element {
       )
     },
     {
+      id: 'sharing',
+      title: 'Sharing',
+      description: 'Publish notes to zennotes.org and manage the connected account.',
+      keywords: [
+        'share',
+        'sharing',
+        'publish',
+        'public',
+        'link',
+        'url',
+        'account',
+        'connect',
+        'zennotes.org',
+        'server'
+      ],
+      searchItems: [
+        {
+          id: 'sharing-account',
+          title: 'ZenNotes account',
+          description: 'Connect the account that shared notes are published under.',
+          keywords: ['share', 'account', 'connect', 'login', 'disconnect']
+        },
+        {
+          id: 'sharing-server',
+          title: 'Share server',
+          description: 'Where shared notes are published (self-hosters can point elsewhere).',
+          keywords: ['share', 'server', 'url', 'self-host']
+        }
+      ],
+      content: <SharingSettings />
+    },
+    {
       id: 'mcp',
       title: 'MCP',
       description:
@@ -3323,6 +3356,214 @@ function SegmentedRow<T extends string>({
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+function SharingSettings(): JSX.Element {
+  const shareAccount = useStore((s) => s.shareAccount)
+  const refreshShareAccount = useStore((s) => s.refreshShareAccount)
+  const connectShareAccount = useStore((s) => s.connectShareAccount)
+  const disconnectShareAccount = useStore((s) => s.disconnectShareAccount)
+  const setShareServerUrl = useStore((s) => s.setShareServerUrl)
+
+  const isDesktop = window.zen.getAppInfo().runtime === 'desktop'
+  const [code, setCode] = useState('')
+  const [serverUrl, setServerUrl] = useState('')
+  const [serverUrlLoaded, setServerUrlLoaded] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [waitingForBrowser, setWaitingForBrowser] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isDesktop) return
+    void refreshShareAccount()
+    void window.zen.shareGetServerUrl().then((url) => {
+      setServerUrl(url)
+      setServerUrlLoaded(true)
+    })
+  }, [isDesktop, refreshShareAccount])
+
+  // The browser handoff completes out-of-band; reflect it live.
+  useEffect(() => {
+    if (!isDesktop) return
+    return window.zen.onShareAuthResult((result) => {
+      setWaitingForBrowser(false)
+      if (result.ok) {
+        setError(null)
+        setCode('')
+      } else if (result.error) {
+        setError(result.error)
+      }
+    })
+  }, [isDesktop])
+
+  if (!isDesktop) {
+    return (
+      <div className="space-y-6">
+        <Section
+          title="ZenNotes Account"
+          description="Publish notes to the web with :share."
+          settingId="sharing-account"
+        >
+          <InlineNote>Note sharing is available in the ZenNotes desktop app.</InlineNote>
+        </Section>
+      </div>
+    )
+  }
+
+  const connected = shareAccount?.connected ?? false
+  const chip = connected
+    ? { label: 'Connected', tone: 'ok' as const }
+    : { label: 'Not connected', tone: 'off' as const }
+
+  const onConnect = async (): Promise<void> => {
+    setError(null)
+    setWaitingForBrowser(true)
+    await connectShareAccount()
+  }
+
+  const onSubmitCode = async (): Promise<void> => {
+    const trimmed = code.trim()
+    if (!trimmed) return
+    setBusy(true)
+    setError(null)
+    try {
+      await window.zen.shareSubmitCode(trimmed)
+      await refreshShareAccount()
+      setCode('')
+      setWaitingForBrowser(false)
+    } catch (err) {
+      setError(
+        ((err as Error).message ?? '').replace(
+          /^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/,
+          ''
+        )
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onSaveServerUrl = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      await setShareServerUrl(serverUrl)
+      const next = await window.zen.shareGetServerUrl()
+      setServerUrl(next)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Section
+        title="ZenNotes Account"
+        description="Sharing publishes a note to the web and gives you a link anyone can read. Shares are tied to your zennotes.org account so you can update, track, and revoke them — here or from the website dashboard."
+        settingId="sharing-account"
+      >
+        <div className="flex flex-col gap-3 px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-sm font-medium text-ink-900">
+                  {connected ? (shareAccount?.name ?? 'Connected') : 'zennotes.org'}
+                </span>
+                <span
+                  className={[
+                    'rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]',
+                    statusChipClass(chip.tone)
+                  ].join(' ')}
+                >
+                  {chip.label}
+                </span>
+              </div>
+              <div className="mt-1 text-xs leading-5 text-ink-500">
+                {connected
+                  ? (shareAccount?.email ?? 'Your account is connected.')
+                  : 'Connect in the browser — sign in (or create an account), approve the app, and you land back here.'}
+              </div>
+              {error && <div className="mt-1.5 text-xs leading-5 text-red-500">{error}</div>}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {connected ? (
+                <button
+                  type="button"
+                  onClick={() => void disconnectShareAccount()}
+                  className="rounded-xl border border-paper-300/70 bg-paper-100/80 px-3 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-paper-200"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void onConnect()}
+                  className="rounded-xl bg-ink-900 px-3.5 py-1.5 text-xs font-medium text-paper-50 transition-colors hover:bg-ink-800"
+                >
+                  {waitingForBrowser ? 'Waiting for browser…' : 'Connect via Browser'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {!connected && waitingForBrowser && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void onSubmitCode()
+                }}
+                placeholder="If the app didn't open, paste the one-time code here"
+                className="min-w-0 flex-1 rounded-xl border border-paper-300/70 bg-paper-50/75 px-3 py-2 text-sm text-ink-900 outline-none placeholder:text-ink-400 focus:border-accent/45"
+              />
+              <button
+                type="button"
+                onClick={() => void onSubmitCode()}
+                disabled={busy || !code.trim()}
+                className={[
+                  'shrink-0 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
+                  busy || !code.trim()
+                    ? 'cursor-not-allowed bg-paper-300 text-ink-500'
+                    : 'bg-ink-900 text-paper-50 hover:bg-ink-800'
+                ].join(' ')}
+              >
+                Submit
+              </button>
+            </div>
+          )}
+        </div>
+      </Section>
+
+      <Section
+        title="Share Server"
+        description="Where notes are published. Self-hosters can point this at their own ZenNotes website."
+        settingId="sharing-server"
+      >
+        <div className="flex items-center gap-2 px-5 py-4">
+          <input
+            type="text"
+            value={serverUrl}
+            onChange={(e) => setServerUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void onSaveServerUrl()
+            }}
+            placeholder="https://zennotes.org"
+            disabled={!serverUrlLoaded}
+            className="min-w-0 flex-1 rounded-xl border border-paper-300/70 bg-paper-50/75 px-3 py-2 font-mono text-xs text-ink-900 outline-none placeholder:text-ink-400 focus:border-accent/45"
+          />
+          <button
+            type="button"
+            onClick={() => void onSaveServerUrl()}
+            disabled={busy || !serverUrlLoaded}
+            className="shrink-0 rounded-xl border border-paper-300/70 bg-paper-100/80 px-3 py-2 text-xs font-medium text-ink-700 transition-colors hover:bg-paper-200"
+          >
+            Save
+          </button>
+        </div>
+      </Section>
     </div>
   )
 }

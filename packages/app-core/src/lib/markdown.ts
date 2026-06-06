@@ -69,7 +69,9 @@ function sanitizeRenderedHtml(html: string): string {
   })
 }
 
-function remarkWikilinks() {
+// Exported so share-payload assembly can parse with the exact same
+// wikilink semantics the preview renders with.
+export function remarkWikilinks() {
   function buildWikilinkNode(bang: string, target: string, label: string): AnyNode {
     const assetKind = classifyLocalAssetHref(target)
     if (bang === '!' && assetKind === 'image') {

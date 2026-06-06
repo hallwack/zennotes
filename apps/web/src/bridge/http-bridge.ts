@@ -48,6 +48,11 @@ import type {
   RemoteWorkspaceProfileInput,
   ServerCapabilities,
   ServerSessionStatus,
+  ShareAccount,
+  ShareAuthResult,
+  ShareConnectPending,
+  SharePublishRequest,
+  ShareRecord,
   VaultSettings,
   TikzRenderResponse,
   VaultChangeEvent,
@@ -58,6 +63,7 @@ import type {
   VaultTextSearchMatch,
   VaultTextSearchToolPaths
 } from '@shared/ipc'
+import { DEFAULT_SHARE_SERVER_URL } from '@shared/ipc'
 import type { VaultTask } from '@shared/tasks'
 import type {
   McpClientId,
@@ -1043,6 +1049,51 @@ function clipboardReadText(): string {
 }
 
 // --------------------------------------------------------------------
+// Note sharing — desktop only in v1; the web build reports disconnected
+// and rejects every mutating call.
+// --------------------------------------------------------------------
+
+async function shareGetAccount(): Promise<ShareAccount> {
+  return { connected: false, name: null, email: null, serverUrl: DEFAULT_SHARE_SERVER_URL }
+}
+
+async function shareBeginConnect(): Promise<ShareConnectPending> {
+  return notImplemented('shareBeginConnect')
+}
+
+async function shareSubmitCode(_code: string): Promise<ShareAccount> {
+  return notImplemented('shareSubmitCode')
+}
+
+async function shareDisconnect(): Promise<ShareAccount> {
+  return notImplemented('shareDisconnect')
+}
+
+async function shareGetServerUrl(): Promise<string> {
+  return DEFAULT_SHARE_SERVER_URL
+}
+
+async function shareSetServerUrl(_url: string): Promise<string> {
+  return notImplemented('shareSetServerUrl')
+}
+
+async function sharePublish(_request: SharePublishRequest): Promise<ShareRecord> {
+  return notImplemented('sharePublish')
+}
+
+async function shareUnpublish(_shareId: number): Promise<void> {
+  notImplemented('shareUnpublish')
+}
+
+async function shareList(): Promise<ShareRecord[]> {
+  return []
+}
+
+function onShareAuthResult(_cb: (result: ShareAuthResult) => void): () => void {
+  return () => {}
+}
+
+// --------------------------------------------------------------------
 // Assemble the `zen` API object
 // --------------------------------------------------------------------
 
@@ -1165,7 +1216,18 @@ export const httpBridge: ZenBridge = {
   raycastGetStatus,
   raycastInstall,
   clipboardWriteText,
-  clipboardReadText
+  clipboardReadText,
+
+  shareGetAccount,
+  shareBeginConnect,
+  shareSubmitCode,
+  shareDisconnect,
+  shareGetServerUrl,
+  shareSetServerUrl,
+  sharePublish,
+  shareUnpublish,
+  shareList,
+  onShareAuthResult
 }
 
 export function installBridge(): void {

@@ -49,6 +49,16 @@ const inFlight = new Map<string, Promise<TikzRenderResult | TikzRenderError>>();
 const CACHE_LIMIT = 200;
 
 function cacheKey(source: string): string {
+  return tikzHash(source);
+}
+
+/**
+ * Content hash of a raw ```tikz fence body. This is the shared contract
+ * between share publishing (main pre-renders SVGs keyed by this hash)
+ * and the share viewer (which hashes `data-tikz-source` to look them
+ * up), so it must stay sha1-hex of the unmodified source.
+ */
+export function tikzHash(source: string): string {
   return createHash("sha1").update(source).digest("hex");
 }
 

@@ -23,6 +23,11 @@ import type {
   RemoteWorkspaceProfileInput,
   ServerCapabilities,
   ServerSessionStatus,
+  ShareAccount,
+  ShareAuthResult,
+  ShareConnectPending,
+  SharePublishRequest,
+  ShareRecord,
   VaultSettings,
   TikzRenderResponse,
   VaultChangeEvent,
@@ -208,6 +213,21 @@ export interface ZenBridge {
   raycastInstall(): Promise<RaycastExtensionStatus>
   clipboardWriteText(text: string): void
   clipboardReadText(): string
+
+  shareGetAccount(): Promise<ShareAccount>
+  /** Open the browser connect handoff; resolves with the pending state nonce. */
+  shareBeginConnect(): Promise<ShareConnectPending>
+  /** Complete the connect flow with a manually pasted one-time code. */
+  shareSubmitCode(code: string): Promise<ShareAccount>
+  shareDisconnect(): Promise<ShareAccount>
+  shareGetServerUrl(): Promise<string>
+  shareSetServerUrl(url: string): Promise<string>
+  /** Publish (or, with existingShareId, re-publish) a note. */
+  sharePublish(request: SharePublishRequest): Promise<ShareRecord>
+  shareUnpublish(shareId: number): Promise<void>
+  shareList(): Promise<ShareRecord[]>
+  /** Fires when a zennotes://auth deep link completes (or fails) the connect flow. */
+  onShareAuthResult(cb: (result: ShareAuthResult) => void): () => void
 }
 
 let installedBridge: ZenBridge | null = null

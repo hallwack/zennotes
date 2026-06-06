@@ -314,6 +314,25 @@ function App(): JSX.Element {
     })
   }, [])
 
+  // Browser connect handoff: a zennotes://auth deep link completed (or
+  // failed) the share-account exchange in the main process.
+  useEffect(() => {
+    void useStore.getState().refreshShareAccount()
+    return window.zen.onShareAuthResult((result) => {
+      void useStore.getState().refreshShareAccount()
+      if (result.ok) {
+        const email = result.account?.email
+        window.alert(
+          email
+            ? `ZenNotes account connected as ${email}. You can now share notes with :share.`
+            : 'ZenNotes account connected. You can now share notes with :share.'
+        )
+      } else if (result.error) {
+        window.alert(result.error)
+      }
+    })
+  }, [])
+
   useEffect(() => {
     window.zen.notifyRendererReady()
   }, [])

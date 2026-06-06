@@ -99,7 +99,21 @@ export function resolveAssetVaultRelativePath(
   notePath: string | null | undefined,
   href: string
 ): string | null {
-  if (!vaultRoot || !notePath) return null
+  if (!vaultRoot) return null
+  return resolveAssetVaultRelativePathIn(useStore.getState().assetFiles, notePath, href)
+}
+
+/**
+ * Pure variant of `resolveAssetVaultRelativePath` that resolves against
+ * an explicit asset list instead of the store. Used by code that runs
+ * outside the live app state (share payload assembly, tests).
+ */
+export function resolveAssetVaultRelativePathIn(
+  assets: ReadonlyArray<{ path: string }>,
+  notePath: string | null | undefined,
+  href: string
+): string | null {
+  if (!notePath) return null
   const trimmed = href.trim()
   if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) return null
   if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed)) return null
@@ -114,7 +128,6 @@ export function resolveAssetVaultRelativePath(
   target = posixNormalize(target)
   if (target.startsWith('../') || target === '..') return null
 
-  const assets = useStore.getState().assetFiles
   if (assets.some((asset) => asset.path === target)) return target
 
   const targetBase = target.split('/').filter(Boolean).pop()?.toLowerCase()
@@ -129,6 +142,16 @@ export function resolveAssetVaultRelativePath(
   }
 
   return null
+}
+
+/**
+ * Decode a markdown asset href into the canonical form used as a share
+ * asset ref: query/hash stripped and percent-escapes decoded. The share
+ * viewer applies the same decoding to rendered `src`/`href` attributes
+ * so refs match on both sides.
+ */
+export function canonicalAssetRef(href: string): string {
+  return decodeHrefPath(href.trim())
 }
 
 function localAssetLabel(href: string, fallback: string): string {
