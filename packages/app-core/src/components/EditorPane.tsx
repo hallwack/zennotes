@@ -110,7 +110,11 @@ import {
   type EditorHydrationState
 } from '../lib/editor-hydration'
 import { recordRendererPerf } from '../lib/perf'
-import { rememberTabScroll, recallTabScroll } from '../lib/tab-scroll-memory'
+import {
+  rememberTabScroll,
+  recallTabScroll,
+  type TabScrollPosition
+} from '../lib/tab-scroll-memory'
 import { parseOutline } from '../lib/outline'
 import {
   findRenderedHeadingForOutlineLine,
@@ -2789,11 +2793,12 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   ])
 
   // Remember this tab's scroll position as the user scrolls, so switching
-  // away and back (e.g. opening a diagram in a tab) restores it instead of
-  // snapping to the top. `content` is only set for real notes — virtual
-  // tabs (tasks, diagrams, …) never reach here. Capture only; the restore
-  // happens in the activation layout effect below.
-  useEffect(() => {
+  // away and back (e.g. opening another note or a diagram in a tab) restores
+  // it instead of snapping to the top. This intentionally uses a layout
+  // effect: its cleanup runs before the next tab's doc-sync layout effect
+  // resets the shared CodeMirror scroller to 0, so the outgoing tab cannot be
+  // overwritten by that programmatic reset.
+  useLayoutEffect(() => {
     const path = content?.path
     if (!path) return
     const editorEl = editorReady ? viewRef.current?.scrollDOM ?? null : null
@@ -2801,36 +2806,46 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     if (!editorEl && !previewEl) return
 
     let frame = 0
-    const capture = (): void => {
-      if (frame) return
-      frame = requestAnimationFrame(() => {
-        frame = 0
-        const prev = recallTabScroll(path)
-        rememberTabScroll(path, {
-          // Keep the other surface's value when one isn't mounted (e.g.
-          // preview-only mode has no editor scroller), so we don't clobber it.
-          editor: editorEl?.scrollTop ?? prev?.editor ?? 0,
-          preview: previewEl?.scrollTop ?? prev?.preview ?? 0
-        })
-      })
+    const captureNow = (): void => {
+      frame = 0
+      const prev = recallTabScroll(path)
+      const view = viewRef.current
+      const selection =
+        view && viewPathRef.current === path ? view.state.selection.main : null
+      const next: TabScrollPosition = {
+        // Keep the other surface's value when one isn't mounted (e.g.
+        // preview-only mode has no editor scroller), so we don't clobber it.
+        editor: editorEl?.scrollTop ?? prev?.editor ?? 0,
+        preview: previewEl?.scrollTop ?? prev?.preview ?? 0
+      }
+      if (selection) {
+        next.editorSelectionAnchor = selection.anchor
+        next.editorSelectionHead = selection.head
+      }
+      rememberTabScroll(path, next)
     }
-    editorEl?.addEventListener('scroll', capture, { passive: true })
-    previewEl?.addEventListener('scroll', capture, { passive: true })
+    const scheduleCapture = (): void => {
+      if (frame) return
+      frame = requestAnimationFrame(captureNow)
+    }
+    editorEl?.addEventListener('scroll', scheduleCapture, { passive: true })
+    previewEl?.addEventListener('scroll', scheduleCapture, { passive: true })
     return () => {
       if (frame) cancelAnimationFrame(frame)
-      editorEl?.removeEventListener('scroll', capture)
-      previewEl?.removeEventListener('scroll', capture)
+      captureNow()
+      editorEl?.removeEventListener('scroll', scheduleCapture)
+      previewEl?.removeEventListener('scroll', scheduleCapture)
     }
   }, [content?.path, mode, editorReady])
 
-  // Restore a note tab's remembered scroll on (re)activation. Keyed on the
+  // Restore a note tab's remembered editor state on (re)activation. Keyed on the
   // active path, which flips note → (diagram tab) → note even though the
   // editor view's own `pathChanged` does not — that's why opening a diagram
-  // in a tab and returning otherwise snapped the note to the top. Runs as a
-  // layout effect (after the doc-sync effect dispatches the body) so the
-  // editor is restored before paint; the preview is restored best-effort now
-  // and again from `onRendered` once async diagrams settle. Explicit jumps
-  // own the scroll, so defer to a matching `pendingJumpLocation`.
+  // in a tab and returning otherwise snapped the note to the top. Runs after
+  // the doc-sync effect dispatches the body so the editor selection and scroll
+  // are restored before paint; the preview is restored best-effort now and
+  // again from `onRendered` once async diagrams settle. Explicit jumps own the
+  // scroll, so defer to a matching `pendingJumpLocation`.
   useLayoutEffect(() => {
     const path = content?.path ?? null
     // Only act on a genuine activation (path change). The `pendingJumpLocation`
@@ -2846,10 +2861,30 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
 
     const applyEditor = (): void => {
       const view = viewRef.current
-      if (view) view.scrollDOM.scrollTop = remembered.editor
+      if (!view) return
+      if (
+        remembered.editorSelectionAnchor != null &&
+        remembered.editorSelectionHead != null
+      ) {
+        const docLength = view.state.doc.length
+        const anchor = Math.max(
+          0,
+          Math.min(docLength, remembered.editorSelectionAnchor)
+        )
+        const head = Math.max(
+          0,
+          Math.min(docLength, remembered.editorSelectionHead)
+        )
+        const current = view.state.selection.main
+        if (current.anchor !== anchor || current.head !== head) {
+          view.dispatch({ selection: { anchor, head } })
+        }
+      }
+      view.scrollDOM.scrollTop = remembered.editor
     }
     applyEditor()
     const raf = requestAnimationFrame(applyEditor)
+    const postFocusTimeout = window.setTimeout(applyEditor, 0)
 
     if (remembered.preview > 0) {
       previewRestoreTargetRef.current = { path, top: remembered.preview }
@@ -2859,7 +2894,10 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
         lastProgrammaticPreviewTopRef.current = previewEl.scrollTop
       }
     }
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(postFocusTimeout)
+    }
   }, [content?.path, pendingJumpLocation?.path])
 
   const paneFrameClass = [
