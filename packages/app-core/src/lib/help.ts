@@ -107,6 +107,11 @@ export const HELP_HOW_TO_GUIDES: HelpCard[] = [
       'Open Settings → Templates. Press “New template” to author one: a template is just markdown with optional YAML frontmatter (`name`, `description`, `category`, `titleTemplate`, `targetFolder`, `targetSubpath`) and a body. Use the variables `{{title}}`, `{{date}}`, `{{date:YYYY-MM-DD}}` (any moment-style format), `{{time}}`, `{{week}}`, and `{{cursor}}` (where the caret lands). Custom templates are saved as plain `.md` files under `.zennotes/templates/`. You can also fork a built-in by pressing Edit on it — that creates an editable copy that shadows the original, and Reset restores the built-in. From any note, the “Save Current Note as Template…” command captures it as a new template.'
   },
   {
+    title: 'Turn a CSV into a database',
+    body:
+      'Run “New Database” from the command palette (or right-click a folder in the sidebar → New database) to create one, or just open an existing `.csv` file from the vault. ZenNotes stores the data as `<Name>.csv` plus a small `<Name>.csv.base.json` sidecar that holds field types, select options, and your saved views. Edit cells inline in the Table view, group records in a Board by any select field, switch the raw-CSV toggle to see the underlying file, and press `o` on a row to open it as a full Markdown page whose frontmatter mirrors the row’s properties. The whole grid is keyboard-driven — see the Database grid shortcuts.'
+  },
+  {
     title: 'Move a note without dragging',
     body:
       'Use the note context menu, search for `move` or `mv` in the command palette, or run `:move` or `:mv`. With no argument, ZenNotes opens a folder picker; with a target like `archive/Reference` or `inbox/Work`, it moves the note directly.'
@@ -177,7 +182,7 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
   {
     title: 'Comments attach to selected text',
     body:
-      'Select text in the editor and use the text menu to add a comment. ZenNotes stores note comments beside the note in vault metadata, then highlights the anchored text and line when the comment is active.'
+      'Select text in the editor and press `Mod+Alt+M` — or open the text menu with `m` — to start a comment, and toggle the Comments panel itself with `Mod+Shift+C`. ZenNotes stores note comments beside the note in vault metadata, then highlights the anchored text and line when the comment is active. In the panel, move with `j` / `k` and use `e` to edit, `r` to resolve, and `d` to delete.'
   },
   {
     title: 'Sessions restore on relaunch',
@@ -240,6 +245,11 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
       'Drop files into a note to insert local files. By default, ZenNotes keeps them as ordinary files in the vault root, can reveal them from the app, and opens images, SVGs, PDFs, audio, video, and generic files inside ZenNotes tabs or reference panes where possible.'
   },
   {
+    title: 'Any CSV is a database',
+    body:
+      'A `.csv` file in your vault is a full Notion-style database, with zero new dependencies. The same data shows up as an editable Table (inline cell editing) and as a Board grouped by a select field; add and switch views freely. Fields are typed — text, number, checkbox, date, select, multi-select — and support sort, filter, and a raw-CSV toggle, while every row keeps a stable id so external edits round-trip cleanly. Open any row as a real Markdown note — a “record page” in a per-database folder — whose frontmatter mirrors the row’s properties and whose body is a freeform page. Create one with “New Database” in the command palette or by right-clicking a folder → New database.'
+  },
+  {
     title: 'The CLI is the bridge to launchers',
     body:
       'The `zen` command-line tool can list, read, search, capture, edit, archive, trash, inspect tasks, and start the MCP server without the app running. Raycast uses it for search, then uses `zennotes://open` and `zennotes://open-window` links to bring the selected note back into ZenNotes. On macOS, Settings → CLI can install the bundled Raycast extension locally so users do not need to wait for the Raycast Store version.'
@@ -280,6 +290,9 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
       { keys: 'Mod+,', action: 'Open Settings', detail: 'Open settings for appearance, editor behavior, fonts, vault controls, and app details.' },
       { keys: 'Mod+1', action: 'Toggle sidebar', detail: 'Hide or show the left sidebar.' },
       { keys: 'Mod+2', action: 'Toggle connections', detail: 'Toggle the connections panel for the active editor pane.' },
+      { keys: 'Mod+Shift+C', action: 'Toggle comments panel', detail: 'Show or hide the Comments panel for the active pane.' },
+      { keys: 'Mod+Alt+M', action: 'Add comment', detail: 'Start a comment on the selected text (or the current line) without reaching for the mouse.' },
+      { keys: 'Alt+H / Alt+J / Alt+K / Alt+L', action: 'Focus pane left / down / up / right', detail: 'Always-on pane-focus motions — they work even with Vim mode off and skip the Ctrl+W prefix some Linux setups intercept. (Ctrl+W h/j/k/l still works in Vim mode.)' },
       { keys: 'Mod+.', action: 'Toggle Zen mode', detail: 'Hide or restore the app chrome so only the active editor, preview, or split view stays on screen.' },
       { keys: 'Mod+W', action: 'Close active tab', detail: 'Close the current note or virtual tab.' },
       { keys: 'Shift+Mod+E', action: 'Export note as PDF', detail: 'Export the active note as a PDF file.' },
@@ -324,6 +337,19 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
       { keys: 'Ctrl-o', action: 'Go back', detail: 'Jump to the previous note location in history.' },
       { keys: 'Ctrl-i', action: 'Go forward', detail: 'Jump forward in note history.' },
       { keys: 'f', action: 'Hint mode', detail: 'Show jump labels for clickable targets when you are not in insert mode.' }
+    ]
+  },
+  {
+    id: 'palettes-and-pickers',
+    title: 'Palettes and pickers',
+    description:
+      'These apply once a palette, search overlay, or picker already has focus — the command palette, note search, vault text search, outline, buffer switcher, the [[ reference picker, the / slash menu, and the date and template pickers.',
+    items: [
+      { keys: 'ArrowDown / Ctrl+N / Ctrl+J', action: 'Next result', detail: 'Move the selection down. Ctrl+J / Ctrl+K behave the same in every picker, so they no longer collide with the global Search-notes shortcut on Windows and Linux.' },
+      { keys: 'ArrowUp / Ctrl+P / Ctrl+K', action: 'Previous result', detail: 'Move the selection up.' },
+      { keys: 'Enter', action: 'Run or open', detail: 'Open the selected note, heading, buffer, command, or search hit.' },
+      { keys: 'Type to filter', action: 'Narrow the list', detail: 'Each picker filters its own data live as you type.' },
+      { keys: 'Esc', action: 'Close the picker', detail: 'Dismiss the overlay and return focus to the previous surface.' }
     ]
   },
   {
@@ -408,6 +434,21 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
       { keys: '/', action: 'Filter the view', detail: 'Focus the local filter box for tasks, tag matches, or trashed notes.' },
       { keys: ':', action: 'Open local ex prompt', detail: 'Run the view-specific command line inside Tasks or Tags.' },
       { keys: 'Esc', action: 'Close or clear', detail: 'Clear the filter first, then close the active virtual view on a second press.' }
+    ]
+  },
+  {
+    id: 'database-grid',
+    title: 'Database grid (Table view)',
+    description: 'Vim-style motions when a CSV database table has focus. The grid yields to these keys so they do not collide with global motions.',
+    items: [
+      { keys: 'h / j / k / l', action: 'Move the cell cursor', detail: 'Arrow keys also work. 0 / ^ jump to the first column, $ to the last.' },
+      { keys: 'g g / G', action: 'Jump to first / last row', detail: 'Fast travel within the current column.' },
+      { keys: 'i / Enter', action: 'Edit the cell', detail: 'On a checkbox cell this toggles it instead of opening an editor.' },
+      { keys: 'Space / x', action: 'Select the row', detail: 'Toggle the row’s selection for bulk actions.' },
+      { keys: 'o', action: 'Open the record page', detail: 'Open the row as a Markdown note in the per-database folder.' },
+      { keys: 'a', action: 'Add a row', detail: 'Append a new empty record and move the cursor to it.' },
+      { keys: 'd d', action: 'Delete the row', detail: 'Remove the record at the cursor.' },
+      { keys: 'Esc', action: 'Clear selection / leave the grid', detail: 'Clears a multi-row selection first, then blurs the grid.' }
     ]
   }
 ]
@@ -624,7 +665,7 @@ export const HELP_SETTINGS: HelpSettingsSection[] = [
   {
     title: 'Appearance',
     items: [
-      { label: 'Theme, mode, and variant', detail: 'Pick a theme family, light or dark mode, and the active flavor or contrast where the theme supports it.' },
+      { label: 'Theme, mode, and variant', detail: 'Pick a theme family — Apple, Gruvbox, Catppuccin, GitHub, Solarized, One, Nord, Tokyo Night, or the monochrome, true-black (OLED-friendly) Black Metal — plus light or dark mode and the active flavor or contrast where the theme supports it.' },
       { label: 'Dark sidebar', detail: 'Tint the sidebar slightly darker than the canvas so the chrome reads as a distinct surface.' },
       { label: 'Sidebar arrows', detail: 'Show or hide disclosure arrows for collapsible sidebar folders and sections.' }
     ]
