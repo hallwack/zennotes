@@ -20,10 +20,14 @@ const (
 	FolderArchive NoteFolder = "archive"
 	FolderTrash   NoteFolder = "trash"
 
-	PrimaryNotesInbox           PrimaryNotesLocation = "inbox"
-	PrimaryNotesRoot            PrimaryNotesLocation = "root"
-	DefaultDailyNotesDirectory                       = "Daily Notes"
-	DefaultWeeklyNotesDirectory                      = "Weekly Notes"
+	PrimaryNotesInbox             PrimaryNotesLocation = "inbox"
+	PrimaryNotesRoot              PrimaryNotesLocation = "root"
+	DefaultDailyNotesDirectory                         = "Daily Notes"
+	DefaultDailyNoteTitlePattern                       = "yyyy-MM-dd"
+	DefaultDailyNoteLocale                             = "system"
+	DefaultWeeklyNotesDirectory                        = "Weekly Notes"
+	DefaultWeeklyNoteTitlePattern                      = "yyyy-'W'ww"
+	DefaultWeeklyNoteLocale                            = "system"
 )
 
 func IsValidFolder(f NoteFolder) bool {
@@ -51,16 +55,28 @@ func FolderForRelativePath(rel string) (NoteFolder, bool) {
 	return FolderInbox, true
 }
 
+type DateNotePatternSettings struct {
+	Directory    string `json:"directory"`
+	TitlePattern string `json:"titlePattern,omitempty"`
+	Locale       string `json:"locale,omitempty"`
+}
+
 type DailyNotesSettings struct {
-	Enabled    bool   `json:"enabled"`
-	Directory  string `json:"directory"`
-	TemplateID string `json:"templateId,omitempty"`
+	Enabled        bool                      `json:"enabled"`
+	Directory      string                    `json:"directory"`
+	TitlePattern   string                    `json:"titlePattern,omitempty"`
+	Locale         string                    `json:"locale,omitempty"`
+	LegacyPatterns []DateNotePatternSettings `json:"legacyPatterns,omitempty"`
+	TemplateID     string                    `json:"templateId,omitempty"`
 }
 
 type WeeklyNotesSettings struct {
-	Enabled    bool   `json:"enabled"`
-	Directory  string `json:"directory"`
-	TemplateID string `json:"templateId,omitempty"`
+	Enabled        bool                      `json:"enabled"`
+	Directory      string                    `json:"directory"`
+	TitlePattern   string                    `json:"titlePattern,omitempty"`
+	Locale         string                    `json:"locale,omitempty"`
+	LegacyPatterns []DateNotePatternSettings `json:"legacyPatterns,omitempty"`
+	TemplateID     string                    `json:"templateId,omitempty"`
 }
 
 type VaultSettings struct {

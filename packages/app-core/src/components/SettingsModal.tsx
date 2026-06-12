@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { DEFAULT_DAILY_NOTES_DIRECTORY, DEFAULT_WEEKLY_NOTES_DIRECTORY } from '@shared/ipc'
+import {
+  DEFAULT_DAILY_NOTE_LOCALE,
+  DEFAULT_DAILY_NOTE_TITLE_PATTERN,
+  DEFAULT_DAILY_NOTES_DIRECTORY,
+  DEFAULT_WEEKLY_NOTE_LOCALE,
+  DEFAULT_WEEKLY_NOTE_TITLE_PATTERN,
+  DEFAULT_WEEKLY_NOTES_DIRECTORY
+} from '@shared/ipc'
 import type {
   AppUpdateState,
   CliInstallStatus,
@@ -36,7 +43,14 @@ import {
   DEFAULT_SYSTEM_FOLDER_LABELS,
   getSystemFolderLabel
 } from '../lib/system-folder-labels'
-import { normalizeDailyNotesDirectory, normalizeWeeklyNotesDirectory } from '../lib/vault-layout'
+import {
+  normalizeDailyNoteLocale,
+  normalizeDailyNotesDirectory,
+  normalizeDailyNoteTitlePattern,
+  normalizeWeeklyNoteLocale,
+  normalizeWeeklyNoteTitlePattern,
+  normalizeWeeklyNotesDirectory
+} from '../lib/vault-layout'
 import { BUILTIN_TEMPLATES } from '@shared/builtin-templates'
 import { composeTemplateFile, mergeTemplates } from '@shared/template-files'
 import { TemplateEditorModal } from './TemplateEditorModal'
@@ -1381,9 +1395,33 @@ export function SettingsModal(): JSX.Element {
         },
         {
           id: 'daily-notes-directory',
-          title: 'Daily notes directory',
+          title: 'Daily notes directory pattern',
           description: 'Stored inside your primary notes area.',
-          keywords: ['daily notes', 'directory', 'folder']
+          keywords: ['daily notes', 'directory', 'folder', 'pattern', 'date']
+        },
+        {
+          id: 'daily-note-title-pattern',
+          title: 'Daily note naming pattern',
+          description: 'Used as the daily note title and filename.',
+          keywords: ['daily notes', 'title', 'filename', 'pattern', 'date']
+        },
+        {
+          id: 'daily-note-locale',
+          title: 'Daily note locale',
+          description: 'Used for localized month and weekday names in daily note patterns.',
+          keywords: ['daily notes', 'locale', 'month', 'weekday', 'pattern']
+        },
+        {
+          id: 'daily-note-pattern-support',
+          title: 'Supported date note pattern tokens',
+          description: 'Reference for supported date tokens, quoted literals, and example outputs.',
+          keywords: ['daily notes', 'weekly notes', 'pattern', 'tokens', 'format', 'yyyy', 'mmm', 'weekday', 'week']
+        },
+        {
+          id: 'daily-note-pattern-reset',
+          title: 'Reset daily note patterns to defaults',
+          description: 'Restore the daily directory, naming, and locale patterns to their defaults.',
+          keywords: ['daily notes', 'reset', 'default', 'defaults', 'restore', 'pattern']
         },
         {
           id: 'open-todays-daily-note',
@@ -1405,9 +1443,33 @@ export function SettingsModal(): JSX.Element {
         },
         {
           id: 'weekly-notes-directory',
-          title: 'Weekly notes directory',
+          title: 'Weekly notes directory pattern',
           description: 'Stored inside your primary notes area.',
-          keywords: ['weekly notes', 'directory', 'folder']
+          keywords: ['weekly notes', 'directory', 'folder', 'pattern', 'date', 'week']
+        },
+        {
+          id: 'weekly-note-title-pattern',
+          title: 'Weekly note naming pattern',
+          description: 'Used as the weekly note title and filename.',
+          keywords: ['weekly notes', 'title', 'filename', 'pattern', 'date', 'week']
+        },
+        {
+          id: 'weekly-note-locale',
+          title: 'Weekly note locale',
+          description: 'Used for localized month and weekday names in weekly note patterns.',
+          keywords: ['weekly notes', 'locale', 'month', 'weekday', 'pattern']
+        },
+        {
+          id: 'weekly-note-pattern-support',
+          title: 'Supported date note pattern tokens',
+          description: 'Reference for supported date tokens, ISO week tokens, quoted literals, and example outputs.',
+          keywords: ['weekly notes', 'pattern', 'tokens', 'format', 'yyyy', 'ww', 'iso week']
+        },
+        {
+          id: 'weekly-note-pattern-reset',
+          title: 'Reset weekly note patterns to defaults',
+          description: 'Restore the weekly directory, naming, and locale patterns to their defaults.',
+          keywords: ['weekly notes', 'reset', 'default', 'defaults', 'restore', 'pattern']
         },
         {
           id: 'weekly-notes-template',
@@ -1648,7 +1710,7 @@ export function SettingsModal(): JSX.Element {
               }
             />
             <TextInputRow
-              label="Daily notes directory"
+              label="Daily notes directory pattern"
               description="Stored inside your primary notes area. The default is `Daily Notes`."
               value={vaultSettings.dailyNotes.directory}
               placeholder={DEFAULT_DAILY_NOTES_DIRECTORY}
@@ -1664,6 +1726,63 @@ export function SettingsModal(): JSX.Element {
                 })
               }
             />
+            <TextInputRow
+              label="Daily note naming pattern"
+              description="Used as the daily note title and filename. The default is `yyyy-MM-dd`."
+              value={vaultSettings.dailyNotes.titlePattern ?? DEFAULT_DAILY_NOTE_TITLE_PATTERN}
+              placeholder={DEFAULT_DAILY_NOTE_TITLE_PATTERN}
+              settingId="daily-note-title-pattern"
+              commitOnBlur
+              onChange={(next) =>
+                void persistVaultSettings({
+                  ...vaultSettings,
+                  dailyNotes: {
+                    ...vaultSettings.dailyNotes,
+                    titlePattern: normalizeDailyNoteTitlePattern(next)
+                  }
+                })
+              }
+            />
+            <TextInputRow
+              label="Daily note locale"
+              description="Used for localized month and weekday names. Use `system`, `en-US`, or `pt-BR`."
+              value={vaultSettings.dailyNotes.locale ?? DEFAULT_DAILY_NOTE_LOCALE}
+              placeholder={DEFAULT_DAILY_NOTE_LOCALE}
+              settingId="daily-note-locale"
+              commitOnBlur
+              onChange={(next) =>
+                void persistVaultSettings({
+                  ...vaultSettings,
+                  dailyNotes: {
+                    ...vaultSettings.dailyNotes,
+                    locale: normalizeDailyNoteLocale(next)
+                  }
+                })
+              }
+            />
+            <DateNotePatternResetRow
+              kind="daily"
+              settingId="daily-note-pattern-reset"
+              isDefault={
+                vaultSettings.dailyNotes.directory === DEFAULT_DAILY_NOTES_DIRECTORY &&
+                (vaultSettings.dailyNotes.titlePattern ?? DEFAULT_DAILY_NOTE_TITLE_PATTERN) ===
+                  DEFAULT_DAILY_NOTE_TITLE_PATTERN &&
+                (vaultSettings.dailyNotes.locale ?? DEFAULT_DAILY_NOTE_LOCALE) ===
+                  DEFAULT_DAILY_NOTE_LOCALE
+              }
+              onReset={() =>
+                void persistVaultSettings({
+                  ...vaultSettings,
+                  dailyNotes: {
+                    ...vaultSettings.dailyNotes,
+                    directory: DEFAULT_DAILY_NOTES_DIRECTORY,
+                    titlePattern: DEFAULT_DAILY_NOTE_TITLE_PATTERN,
+                    locale: DEFAULT_DAILY_NOTE_LOCALE
+                  }
+                })
+              }
+            />
+            <DateNotePatternSupportRow kind="daily" settingId="daily-note-pattern-support" />
             <TemplateSelectRow
               label="Daily note template"
               description="Applied when a daily note is created. None creates a blank note."
@@ -1705,7 +1824,7 @@ export function SettingsModal(): JSX.Element {
 
           <Section
             title="Weekly Notes"
-            description="Create one note per ISO week with a YYYY-Www title and keep them in a dedicated directory."
+            description="Create one note per ISO week with a configurable title and keep it in a dedicated directory."
           >
             <ToggleRow
               label="Enable weekly notes"
@@ -1723,7 +1842,7 @@ export function SettingsModal(): JSX.Element {
               }
             />
             <TextInputRow
-              label="Weekly notes directory"
+              label="Weekly notes directory pattern"
               description="Stored inside your primary notes area. The default is `Weekly Notes`."
               value={vaultSettings.weeklyNotes.directory}
               placeholder={DEFAULT_WEEKLY_NOTES_DIRECTORY}
@@ -1739,6 +1858,63 @@ export function SettingsModal(): JSX.Element {
                 })
               }
             />
+            <TextInputRow
+              label="Weekly note naming pattern"
+              description="Used as the weekly note title and filename. The default is `yyyy-'W'ww`."
+              value={vaultSettings.weeklyNotes.titlePattern ?? DEFAULT_WEEKLY_NOTE_TITLE_PATTERN}
+              placeholder={DEFAULT_WEEKLY_NOTE_TITLE_PATTERN}
+              settingId="weekly-note-title-pattern"
+              commitOnBlur
+              onChange={(next) =>
+                void persistVaultSettings({
+                  ...vaultSettings,
+                  weeklyNotes: {
+                    ...vaultSettings.weeklyNotes,
+                    titlePattern: normalizeWeeklyNoteTitlePattern(next)
+                  }
+                })
+              }
+            />
+            <TextInputRow
+              label="Weekly note locale"
+              description="Used for localized month and weekday names. Use `system`, `en-US`, or `pt-BR`."
+              value={vaultSettings.weeklyNotes.locale ?? DEFAULT_WEEKLY_NOTE_LOCALE}
+              placeholder={DEFAULT_WEEKLY_NOTE_LOCALE}
+              settingId="weekly-note-locale"
+              commitOnBlur
+              onChange={(next) =>
+                void persistVaultSettings({
+                  ...vaultSettings,
+                  weeklyNotes: {
+                    ...vaultSettings.weeklyNotes,
+                    locale: normalizeWeeklyNoteLocale(next)
+                  }
+                })
+              }
+            />
+            <DateNotePatternResetRow
+              kind="weekly"
+              settingId="weekly-note-pattern-reset"
+              isDefault={
+                vaultSettings.weeklyNotes.directory === DEFAULT_WEEKLY_NOTES_DIRECTORY &&
+                (vaultSettings.weeklyNotes.titlePattern ?? DEFAULT_WEEKLY_NOTE_TITLE_PATTERN) ===
+                  DEFAULT_WEEKLY_NOTE_TITLE_PATTERN &&
+                (vaultSettings.weeklyNotes.locale ?? DEFAULT_WEEKLY_NOTE_LOCALE) ===
+                  DEFAULT_WEEKLY_NOTE_LOCALE
+              }
+              onReset={() =>
+                void persistVaultSettings({
+                  ...vaultSettings,
+                  weeklyNotes: {
+                    ...vaultSettings.weeklyNotes,
+                    directory: DEFAULT_WEEKLY_NOTES_DIRECTORY,
+                    titlePattern: DEFAULT_WEEKLY_NOTE_TITLE_PATTERN,
+                    locale: DEFAULT_WEEKLY_NOTE_LOCALE
+                  }
+                })
+              }
+            />
+            <DateNotePatternSupportRow kind="weekly" settingId="weekly-note-pattern-support" />
             <TemplateSelectRow
               label="Weekly note template"
               description="Applied when a weekly note is created. None creates a blank note."
@@ -1759,7 +1935,7 @@ export function SettingsModal(): JSX.Element {
               <div className="min-w-0">
                 <div className="text-sm font-medium text-ink-900">Open this week's note</div>
                 <div className="mt-1 text-xs leading-5 text-ink-500">
-                  Opens this week's note if it exists, otherwise creates it with a YYYY-Www title.
+                  Opens this week's note if it exists, otherwise creates it with the configured weekly title pattern.
                 </div>
               </div>
               <button
@@ -2743,6 +2919,119 @@ function Section({
 
 function InlineNote({ children }: { children: React.ReactNode }): JSX.Element {
   return <div className="px-5 py-4 text-xs leading-5 text-ink-500">{children}</div>
+}
+
+const DATE_NOTE_PATTERN_TOKENS = [
+  { token: 'yyyy', output: '2026', meaning: 'year; ISO week-year for weekly notes' },
+  { token: 'yy', output: '26', meaning: '2-digit year' },
+  { token: 'M', output: '6', meaning: 'month' },
+  { token: 'MM', output: '06', meaning: 'padded month' },
+  { token: 'MMM', output: 'Jun', meaning: 'short month name' },
+  { token: 'MMMM', output: 'June', meaning: 'full month name' },
+  { token: 'd', output: '9', meaning: 'day of month' },
+  { token: 'dd', output: '09', meaning: 'padded day of month' },
+  { token: 'EEE', output: 'Tue', meaning: 'short weekday name' },
+  { token: 'EEEE', output: 'Tuesday', meaning: 'full weekday name' },
+  { token: 'w', output: '24', meaning: 'ISO week number' },
+  { token: 'ww', output: '24', meaning: 'padded ISO week number' }
+]
+
+function DateNotePatternSupportRow({
+  kind,
+  settingId
+}: {
+  kind: 'daily' | 'weekly'
+  settingId?: string
+}): JSX.Element {
+  const example =
+    kind === 'daily' ? (
+      <>
+        <code className="font-mono text-ink-700">yyyy/MM-MMM</code> +{' '}
+        <code className="font-mono text-ink-700">yyyy-MM-dd-EEE</code> creates{' '}
+        <code className="font-mono text-ink-700">2026/06-Jun/2026-06-09-Tue.md</code>.
+      </>
+    ) : (
+      <>
+        <code className="font-mono text-ink-700">yyyy/MM-MMM</code> +{' '}
+        <code className="font-mono text-ink-700">yyyy-'W'ww-EEE</code> creates{' '}
+        <code className="font-mono text-ink-700">2026/06-Jun/2026-W24-Mon.md</code>.
+      </>
+    )
+
+  return (
+    <div className="px-5 py-4" {...settingsSearchTargetProps(settingId)}>
+      <div className="text-sm font-medium text-ink-900">Supported pattern tokens</div>
+      <div className="mt-1 text-xs leading-5 text-ink-500">
+        Directory and naming patterns support these tokens. Weekly notes render date tokens from
+        the ISO week’s Monday. Wrap literal words in single quotes, for example{' '}
+        <code className="font-mono text-ink-700">'Daily Notes'/yyyy/MM-MMM</code>.
+      </div>
+      <dl className="mt-4 grid grid-cols-1 gap-x-5 gap-y-2 text-xs sm:grid-cols-2">
+        {DATE_NOTE_PATTERN_TOKENS.map((item) => (
+          <div key={item.token} className="grid grid-cols-[5rem_4.5rem_1fr] items-baseline gap-3">
+            <dt className="font-mono text-ink-900">{item.token}</dt>
+            <dd className="font-mono text-ink-600">{item.output}</dd>
+            <dd className="text-ink-500">{item.meaning}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-4 space-y-1 text-xs leading-5 text-ink-500">
+        <div>
+          <span className="font-medium text-ink-700">Example:</span> {example}
+        </div>
+        <div>
+          Localized names use the note locale:{' '}
+          <code className="font-mono text-ink-700">system</code>,{' '}
+          <code className="font-mono text-ink-700">en-US</code>,{' '}
+          <code className="font-mono text-ink-700">pt-BR</code>, or another BCP 47 locale.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DateNotePatternResetRow({
+  kind,
+  isDefault,
+  onReset,
+  settingId
+}: {
+  kind: 'daily' | 'weekly'
+  isDefault: boolean
+  onReset: () => void
+  settingId?: string
+}): JSX.Element {
+  const directory =
+    kind === 'daily' ? DEFAULT_DAILY_NOTES_DIRECTORY : DEFAULT_WEEKLY_NOTES_DIRECTORY
+  const naming =
+    kind === 'daily' ? DEFAULT_DAILY_NOTE_TITLE_PATTERN : DEFAULT_WEEKLY_NOTE_TITLE_PATTERN
+  const locale = kind === 'daily' ? DEFAULT_DAILY_NOTE_LOCALE : DEFAULT_WEEKLY_NOTE_LOCALE
+  return (
+    <div
+      className="flex items-center justify-between gap-4 px-5 py-4"
+      {...settingsSearchTargetProps(settingId)}
+    >
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-ink-900">Reset to defaults</div>
+        <div className="mt-1 text-xs leading-5 text-ink-500">
+          Restore the directory, naming, and locale to{' '}
+          <code className="font-mono text-ink-700">{directory}</code>,{' '}
+          <code className="font-mono text-ink-700">{naming}</code>, and{' '}
+          <code className="font-mono text-ink-700">{locale}</code>. Notes created with the
+          current pattern stay recognized.
+        </div>
+      </div>
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={isDefault}
+        onClick={onReset}
+        className="shrink-0"
+      >
+        Reset to defaults
+      </Button>
+    </div>
+  )
 }
 
 const DEFAULT_QUICK_CAPTURE_HOTKEY = 'CommandOrControl+Shift+Space'

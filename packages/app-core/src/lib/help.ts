@@ -492,7 +492,7 @@ export const HELP_VIM_COMMANDS: HelpExCommand[] = [
   {
     command: ':weekly',
     summary: "Open this week's note",
-    detail: 'Open or create this week’s note with a YYYY-Www title (requires weekly notes enabled in Settings → Vault). Uses the assigned weekly template if one is set.'
+    detail: 'Open or create this week’s note with the configured weekly note pattern (requires weekly notes enabled in Settings → Vault). Uses the assigned weekly template if one is set.'
   },
   {
     command: ':tag foo bar',
@@ -710,8 +710,8 @@ export const HELP_SETTINGS: HelpSettingsSection[] = [
     items: [
       { label: 'Vault location', detail: 'Reveal or change the root folder ZenNotes treats as the active vault.' },
       { label: 'Primary notes location', detail: 'Treat `inbox/` as the main notes area, or use the vault root directly for an Obsidian-style flat vault.' },
-      { label: 'Daily notes', detail: 'Enable a daily-notes workflow, choose its directory, and assign a template so each day’s note starts pre-filled. Open today’s note with `Space d`, `:daily`, or the command palette.' },
-      { label: 'Weekly notes', detail: 'Enable weekly notes with a YYYY-Www title, choose a directory, and assign a template. Open this week’s note with `Space w`, `:weekly`, or the command palette.' },
+      { label: 'Daily notes', detail: "Enable a daily-notes workflow, choose a directory pattern, naming pattern, locale, and template so each day’s note starts in the right place. Supported tokens are `yyyy`, `yy`, `M`, `MM`, `MMM`, `MMMM`, `d`, `dd`, `EEE`, `EEEE`, `w`, and `ww`; quote literal words like `'Daily Notes'/yyyy/MM-MMM`. Open today’s note with `Space d`, `:daily`, or the command palette." },
+      { label: 'Weekly notes', detail: "Enable weekly notes with a directory pattern, naming pattern, locale, and template. Weekly patterns support the same tokens as daily notes plus ISO week `w` and `ww`; the default title pattern is `yyyy-'W'ww`. Open this week’s note with `Space w`, `:weekly`, or the command palette." },
       { label: 'System folder labels', detail: 'Rename how Inbox, Quick Notes, Archive, and Trash appear in the UI without renaming the real folders on disk.' }
     ]
   },

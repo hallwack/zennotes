@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { NoteMeta, VaultSettings } from '@shared/ipc'
-import { classifyDateNote } from './vault-layout'
+import {
+  classifyDateNote,
+  dailyNoteLocationForDate,
+  dateNoteFolderMayBelongToDatePattern,
+  dateNoteDirectoryDisplayLabel,
+  weeklyNoteLocationForDate
+} from './vault-layout'
 
 function note(path: string, title: string): NoteMeta {
   return {
@@ -46,5 +52,358 @@ describe('classifyDateNote', () => {
 
     expect(info).toMatchObject({ kind: 'weekly' })
     expect(info?.date).toEqual(new Date(2026, 5, 8))
+  })
+
+  it('recognizes weekly notes created from date-based directory and title patterns', () => {
+    const info = classifyDateNote(
+      note('inbox/2026/06-Jun/2026-W24-Mon.md', '2026-W24-Mon'),
+      {
+        primaryNotesLocation: 'inbox',
+        dailyNotes: { enabled: false, directory: 'Daily Notes' },
+        weeklyNotes: {
+          enabled: true,
+          directory: 'yyyy/MM-MMM',
+          titlePattern: "yyyy-'W'ww-EEE",
+          locale: 'en-US'
+        },
+        folderIcons: {}
+      } as VaultSettings
+    )
+
+    expect(info).toMatchObject({ kind: 'weekly' })
+    expect(info?.date).toEqual(new Date(2026, 5, 8))
+  })
+
+  it('recognizes daily notes created from date-based directory and title patterns', () => {
+    const info = classifyDateNote(
+      note('inbox/2026/06-Jun/2026-06-09-Tue.md', '2026-06-09-Tue'),
+      {
+        primaryNotesLocation: 'inbox',
+        dailyNotes: {
+          enabled: true,
+          directory: 'yyyy/MM-MMM',
+          titlePattern: 'yyyy-MM-dd-EEE',
+          locale: 'en-US'
+        },
+        weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+        folderIcons: {}
+      } as VaultSettings
+    )
+
+    expect(info).toMatchObject({ kind: 'daily' })
+    expect(info?.date).toEqual(new Date(2026, 5, 9))
+  })
+
+  it('keeps existing lowercase daily directories literal', () => {
+    const date = new Date(2026, 5, 9)
+    const vaultSettings = settings('daily', 'Weekly Notes')
+
+    expect(dailyNoteLocationForDate(date, vaultSettings)).toEqual({
+      subpath: 'daily',
+      title: '2026-06-09'
+    })
+
+    const info = classifyDateNote(note('inbox/daily/2026-06-09.md', '2026-06-09'), vaultSettings)
+
+    expect(info).toMatchObject({ kind: 'daily' })
+    expect(info?.date).toEqual(date)
+  })
+
+  it('renders daily note locations from date-based directory and title patterns', () => {
+    const location = dailyNoteLocationForDate(new Date(2026, 5, 9), {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: {
+        enabled: true,
+        directory: 'yyyy/MM-MMM',
+        titlePattern: 'yyyy-MM-dd-EEE',
+        locale: 'en-US'
+      },
+      weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+      folderIcons: {}
+    } as VaultSettings)
+
+    expect(location).toEqual({
+      subpath: '2026/06-Jun',
+      title: '2026-06-09-Tue'
+    })
+  })
+
+  it('supports month-only daily directory patterns when the title supplies the date', () => {
+    const vaultSettings = {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: {
+        enabled: true,
+        directory: 'MM-MMM',
+        titlePattern: 'yyyy-MM-dd',
+        locale: 'en-US'
+      },
+      weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+      folderIcons: {}
+    } as VaultSettings
+
+    expect(dailyNoteLocationForDate(new Date(2026, 5, 9), vaultSettings)).toEqual({
+      subpath: '06-Jun',
+      title: '2026-06-09'
+    })
+
+    const info = classifyDateNote(
+      note('inbox/06-Jun/2026-06-09.md', '2026-06-09'),
+      vaultSettings
+    )
+
+    expect(info).toMatchObject({ kind: 'daily' })
+    expect(info?.date).toEqual(new Date(2026, 5, 9))
+  })
+
+  it('renders quoted literals inside daily directory patterns', () => {
+    const location = dailyNoteLocationForDate(new Date(2026, 5, 9), {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: {
+        enabled: true,
+        directory: "'Daily Notes'/yyyy/MM-MMM",
+        titlePattern: 'yyyy-MM-dd-EEE',
+        locale: 'en-US'
+      },
+      weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+      folderIcons: {}
+    } as VaultSettings)
+
+    expect(location).toEqual({
+      subpath: 'Daily Notes/2026/06-Jun',
+      title: '2026-06-09-Tue'
+    })
+  })
+
+  it('renders weekly note locations from date-based directory and title patterns', () => {
+    const location = weeklyNoteLocationForDate(new Date(2026, 5, 9), {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: { enabled: false, directory: 'Daily Notes' },
+      weeklyNotes: {
+        enabled: true,
+        directory: "'Weekly Notes'/yyyy/MM-MMM",
+        titlePattern: "yyyy-'W'ww-EEE",
+        locale: 'en-US'
+      },
+      folderIcons: {}
+    } as VaultSettings)
+
+    expect(location).toEqual({
+      subpath: 'Weekly Notes/2026/06-Jun',
+      title: '2026-W24-Mon'
+    })
+  })
+
+  it('uses the ISO week-year for weekly pattern years', () => {
+    const location = weeklyNoteLocationForDate(new Date(2021, 0, 1), {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: { enabled: false, directory: 'Daily Notes' },
+      weeklyNotes: {
+        enabled: true,
+        directory: 'yyyy',
+        titlePattern: "yyyy-'W'ww",
+        locale: 'en-US'
+      },
+      folderIcons: {}
+    } as VaultSettings)
+
+    expect(location).toEqual({
+      subpath: '2020',
+      title: '2020-W53'
+    })
+  })
+
+  it('supports ISO week-only weekly directory patterns', () => {
+    const location = weeklyNoteLocationForDate(new Date(2026, 5, 9), {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: { enabled: false, directory: 'Daily Notes' },
+      weeklyNotes: {
+        enabled: true,
+        directory: 'ww',
+        titlePattern: "yyyy-'W'ww",
+        locale: 'en-US'
+      },
+      folderIcons: {}
+    } as VaultSettings)
+
+    expect(location).toEqual({
+      subpath: '24',
+      title: '2026-W24'
+    })
+  })
+
+  it('keeps existing lowercase weekly directories literal', () => {
+    const vaultSettings = {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: { enabled: false, directory: 'Daily Notes' },
+      weeklyNotes: {
+        enabled: true,
+        directory: 'week',
+        titlePattern: "yyyy-'W'ww",
+        locale: 'en-US'
+      },
+      folderIcons: {}
+    } as VaultSettings
+
+    expect(weeklyNoteLocationForDate(new Date(2026, 5, 9), vaultSettings)).toEqual({
+      subpath: 'week',
+      title: '2026-W24'
+    })
+
+    const info = classifyDateNote(note('inbox/week/2026-W24.md', '2026-W24'), vaultSettings)
+
+    expect(info).toMatchObject({ kind: 'weekly' })
+    expect(info?.date).toEqual(new Date(2026, 5, 8))
+  })
+
+  it('recognizes a daily note whose title encodes the day via ISO week and weekday', () => {
+    // The title carries no day-of-month token; the day is implied by the ISO
+    // week (`ww`) plus the weekday name (`EEE`). 2026-W24-Fri is Fri Jun 12.
+    const vaultSettings = {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: {
+        enabled: true,
+        directory: 'yyyy/MM-MMM',
+        titlePattern: "yyyy-'W'ww-EEE",
+        locale: 'en-US'
+      },
+      weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+      folderIcons: {}
+    } as VaultSettings
+
+    const info = classifyDateNote(
+      note('inbox/2026/06-Jun/2026-W24-Fri.md', '2026-W24-Fri'),
+      vaultSettings
+    )
+
+    expect(info).toMatchObject({ kind: 'daily' })
+    expect(info?.date).toEqual(new Date(2026, 5, 12))
+  })
+
+  it('recognizes a daily note when the year comes only from the directory', () => {
+    const vaultSettings = {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: {
+        enabled: true,
+        directory: 'yyyy',
+        titlePattern: 'MM-dd',
+        locale: 'en-US'
+      },
+      weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+      folderIcons: {}
+    } as VaultSettings
+
+    const info = classifyDateNote(note('inbox/2026/06-09.md', '06-09'), vaultSettings)
+
+    expect(info).toMatchObject({ kind: 'daily' })
+    expect(info?.date).toEqual(new Date(2026, 5, 9))
+  })
+
+  it('does not classify a note whose directory and title disagree on the date', () => {
+    const vaultSettings = {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: {
+        enabled: true,
+        directory: 'yyyy/MM-MMM',
+        titlePattern: "yyyy-'W'ww-EEE",
+        locale: 'en-US'
+      },
+      weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+      folderIcons: {}
+    } as VaultSettings
+
+    // ISO week 24 falls entirely in June, so a July folder cannot round-trip.
+    const info = classifyDateNote(
+      note('inbox/2026/07-Jul/2026-W24-Fri.md', '2026-W24-Fri'),
+      vaultSettings
+    )
+
+    expect(info).toBeNull()
+  })
+
+  it('recognizes daily notes from legacy patterns after the active pattern changes', () => {
+    const vaultSettings = {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: {
+        enabled: true,
+        directory: 'yyyy/MM-MMM',
+        titlePattern: 'yyyy-MM-dd-EEE',
+        locale: 'en-US',
+        legacyPatterns: [
+          { directory: 'Daily Notes', titlePattern: 'yyyy-MM-dd', locale: 'en-US' }
+        ]
+      },
+      weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+      folderIcons: {}
+    } as VaultSettings
+
+    const info = classifyDateNote(
+      note('inbox/Daily Notes/2026-06-12.md', '2026-06-12'),
+      vaultSettings
+    )
+
+    expect(info).toMatchObject({ kind: 'daily' })
+    expect(info?.date).toEqual(new Date(2026, 5, 12))
+  })
+
+  it('recognizes weekly notes from legacy patterns after the active pattern changes', () => {
+    const vaultSettings = {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: { enabled: false, directory: 'Daily Notes' },
+      weeklyNotes: {
+        enabled: true,
+        directory: 'yyyy/MM-MMM',
+        titlePattern: "yyyy-'W'ww-EEE",
+        locale: 'en-US',
+        legacyPatterns: [
+          { directory: 'Weekly Notes', titlePattern: "yyyy-'W'ww", locale: 'en-US' }
+        ]
+      },
+      folderIcons: {}
+    } as VaultSettings
+
+    const info = classifyDateNote(
+      note('inbox/Weekly Notes/2026-W24.md', '2026-W24'),
+      vaultSettings
+    )
+
+    expect(info).toMatchObject({ kind: 'weekly' })
+    expect(info?.date).toEqual(new Date(2026, 5, 8))
+  })
+})
+
+describe('dateNoteDirectoryDisplayLabel', () => {
+  it('uses the fallback label for fully date-based directory patterns', () => {
+    expect(dateNoteDirectoryDisplayLabel('yyyy/MM-MMM', 'Daily Notes')).toBe('Daily Notes')
+  })
+
+  it('uses quoted literal directory segments as the label', () => {
+    expect(dateNoteDirectoryDisplayLabel("'Journal'/yyyy/MM-MMM", 'Daily Notes')).toBe('Journal')
+  })
+
+  it('keeps literal legacy directories unchanged', () => {
+    expect(dateNoteDirectoryDisplayLabel('week', 'Weekly Notes')).toBe('week')
+  })
+})
+
+describe('dateNoteFolderMayBelongToDatePattern', () => {
+  it('matches active and legacy date-pattern folders for sidebar pruning', () => {
+    const vaultSettings = {
+      primaryNotesLocation: 'inbox',
+      dailyNotes: {
+        enabled: true,
+        directory: 'yyyy/MMM-MMM',
+        titlePattern: 'yyyy-MM-dd-EEE',
+        locale: 'en-US',
+        legacyPatterns: [
+          { directory: 'Daily Notes', titlePattern: 'yyyy-MM-dd', locale: 'en-US' }
+        ]
+      },
+      weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+      folderIcons: {}
+    } as VaultSettings
+
+    expect(dateNoteFolderMayBelongToDatePattern('2026/Jun-Jun', vaultSettings)).toBe(true)
+    expect(dateNoteFolderMayBelongToDatePattern('Daily Notes', vaultSettings)).toBe(true)
+    expect(dateNoteFolderMayBelongToDatePattern('Projects', vaultSettings)).toBe(false)
   })
 })

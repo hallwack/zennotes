@@ -549,8 +549,20 @@ func TestVaultSettingsWeeklyNotesRoundTrip(t *testing.T) {
 	// the toggle always reverted after a reload. (#117)
 	if _, err := v.SetSettings(VaultSettings{
 		PrimaryNotesLocation: PrimaryNotesInbox,
-		DailyNotes:           DailyNotesSettings{Enabled: true, Directory: "Daily", TemplateID: "daily-tmpl"},
-		WeeklyNotes:          WeeklyNotesSettings{Enabled: true, Directory: "My Weeks", TemplateID: "weekly-tmpl"},
+		DailyNotes: DailyNotesSettings{
+			Enabled:      true,
+			Directory:    "Daily",
+			TitlePattern: "yyyy-MM-dd-EEE",
+			Locale:       "pt-BR",
+			TemplateID:   "daily-tmpl",
+		},
+		WeeklyNotes: WeeklyNotesSettings{
+			Enabled:      true,
+			Directory:    "My Weeks",
+			TitlePattern: "yyyy-'W'ww-EEE",
+			Locale:       "en-US",
+			TemplateID:   "weekly-tmpl",
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -568,8 +580,20 @@ func TestVaultSettingsWeeklyNotesRoundTrip(t *testing.T) {
 	if got.WeeklyNotes.TemplateID != "weekly-tmpl" {
 		t.Errorf("weekly templateId = %q, want %q", got.WeeklyNotes.TemplateID, "weekly-tmpl")
 	}
+	if got.WeeklyNotes.TitlePattern != "yyyy-'W'ww-EEE" {
+		t.Errorf("weekly titlePattern = %q, want %q", got.WeeklyNotes.TitlePattern, "yyyy-'W'ww-EEE")
+	}
+	if got.WeeklyNotes.Locale != "en-US" {
+		t.Errorf("weekly locale = %q, want %q", got.WeeklyNotes.Locale, "en-US")
+	}
 	if got.DailyNotes.TemplateID != "daily-tmpl" {
 		t.Errorf("daily templateId = %q, want %q", got.DailyNotes.TemplateID, "daily-tmpl")
+	}
+	if got.DailyNotes.TitlePattern != "yyyy-MM-dd-EEE" {
+		t.Errorf("daily titlePattern = %q, want %q", got.DailyNotes.TitlePattern, "yyyy-MM-dd-EEE")
+	}
+	if got.DailyNotes.Locale != "pt-BR" {
+		t.Errorf("daily locale = %q, want %q", got.DailyNotes.Locale, "pt-BR")
 	}
 
 	// The key must actually reach vault.json — the original bug was that it

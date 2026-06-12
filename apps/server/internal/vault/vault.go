@@ -224,17 +224,27 @@ func cloneSettings(settings VaultSettings) VaultSettings {
 	for key, value := range settings.FolderIcons {
 		folderIcons[key] = value
 	}
+	dailyLegacyPatterns := make([]DateNotePatternSettings, len(settings.DailyNotes.LegacyPatterns))
+	copy(dailyLegacyPatterns, settings.DailyNotes.LegacyPatterns)
+	weeklyLegacyPatterns := make([]DateNotePatternSettings, len(settings.WeeklyNotes.LegacyPatterns))
+	copy(weeklyLegacyPatterns, settings.WeeklyNotes.LegacyPatterns)
 	return VaultSettings{
 		PrimaryNotesLocation: settings.PrimaryNotesLocation,
 		DailyNotes: DailyNotesSettings{
-			Enabled:    settings.DailyNotes.Enabled,
-			Directory:  settings.DailyNotes.Directory,
-			TemplateID: settings.DailyNotes.TemplateID,
+			Enabled:        settings.DailyNotes.Enabled,
+			Directory:      settings.DailyNotes.Directory,
+			TitlePattern:   settings.DailyNotes.TitlePattern,
+			Locale:         settings.DailyNotes.Locale,
+			LegacyPatterns: dailyLegacyPatterns,
+			TemplateID:     settings.DailyNotes.TemplateID,
 		},
 		WeeklyNotes: WeeklyNotesSettings{
-			Enabled:    settings.WeeklyNotes.Enabled,
-			Directory:  settings.WeeklyNotes.Directory,
-			TemplateID: settings.WeeklyNotes.TemplateID,
+			Enabled:        settings.WeeklyNotes.Enabled,
+			Directory:      settings.WeeklyNotes.Directory,
+			TitlePattern:   settings.WeeklyNotes.TitlePattern,
+			Locale:         settings.WeeklyNotes.Locale,
+			LegacyPatterns: weeklyLegacyPatterns,
+			TemplateID:     settings.WeeklyNotes.TemplateID,
 		},
 		FolderIcons: folderIcons,
 	}
@@ -248,12 +258,82 @@ func normalizeDailyNotesDirectory(value string) string {
 	return trimmed
 }
 
+func normalizeDailyNoteTitlePattern(value string) string {
+	trimmed := strings.TrimSpace(strings.NewReplacer("/", "-", "\\", "-").Replace(value))
+	if trimmed == "" {
+		return DefaultDailyNoteTitlePattern
+	}
+	return trimmed
+}
+
+func normalizeDailyNoteLocale(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return DefaultDailyNoteLocale
+	}
+	return trimmed
+}
+
 func normalizeWeeklyNotesDirectory(value string) string {
 	trimmed := strings.Trim(value, "/")
 	if trimmed == "" {
 		return DefaultWeeklyNotesDirectory
 	}
 	return trimmed
+}
+
+func normalizeWeeklyNoteTitlePattern(value string) string {
+	trimmed := strings.TrimSpace(strings.NewReplacer("/", "-", "\\", "-").Replace(value))
+	if trimmed == "" {
+		return DefaultWeeklyNoteTitlePattern
+	}
+	return trimmed
+}
+
+func normalizeWeeklyNoteLocale(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return DefaultWeeklyNoteLocale
+	}
+	return trimmed
+}
+
+func normalizeDailyNoteLegacyPatterns(value []DateNotePatternSettings) []DateNotePatternSettings {
+	out := []DateNotePatternSettings{}
+	seen := map[string]bool{}
+	for _, pattern := range value {
+		next := DateNotePatternSettings{
+			Directory:    normalizeDailyNotesDirectory(pattern.Directory),
+			TitlePattern: normalizeDailyNoteTitlePattern(pattern.TitlePattern),
+			Locale:       normalizeDailyNoteLocale(pattern.Locale),
+		}
+		key := next.Directory + "\x00" + next.TitlePattern + "\x00" + next.Locale
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, next)
+	}
+	return out
+}
+
+func normalizeWeeklyNoteLegacyPatterns(value []DateNotePatternSettings) []DateNotePatternSettings {
+	out := []DateNotePatternSettings{}
+	seen := map[string]bool{}
+	for _, pattern := range value {
+		next := DateNotePatternSettings{
+			Directory:    normalizeWeeklyNotesDirectory(pattern.Directory),
+			TitlePattern: normalizeWeeklyNoteTitlePattern(pattern.TitlePattern),
+			Locale:       normalizeWeeklyNoteLocale(pattern.Locale),
+		}
+		key := next.Directory + "\x00" + next.TitlePattern + "\x00" + next.Locale
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, next)
+	}
+	return out
 }
 
 func normalizePrimaryNotesLocation(value PrimaryNotesLocation) PrimaryNotesLocation {
@@ -282,14 +362,20 @@ func normalizeVaultSettings(value VaultSettings, fallbackPrimary PrimaryNotesLoc
 			return value.PrimaryNotesLocation
 		}()),
 		DailyNotes: DailyNotesSettings{
-			Enabled:    value.DailyNotes.Enabled,
-			Directory:  normalizeDailyNotesDirectory(value.DailyNotes.Directory),
-			TemplateID: value.DailyNotes.TemplateID,
+			Enabled:        value.DailyNotes.Enabled,
+			Directory:      normalizeDailyNotesDirectory(value.DailyNotes.Directory),
+			TitlePattern:   normalizeDailyNoteTitlePattern(value.DailyNotes.TitlePattern),
+			Locale:         normalizeDailyNoteLocale(value.DailyNotes.Locale),
+			LegacyPatterns: normalizeDailyNoteLegacyPatterns(value.DailyNotes.LegacyPatterns),
+			TemplateID:     value.DailyNotes.TemplateID,
 		},
 		WeeklyNotes: WeeklyNotesSettings{
-			Enabled:    value.WeeklyNotes.Enabled,
-			Directory:  normalizeWeeklyNotesDirectory(value.WeeklyNotes.Directory),
-			TemplateID: value.WeeklyNotes.TemplateID,
+			Enabled:        value.WeeklyNotes.Enabled,
+			Directory:      normalizeWeeklyNotesDirectory(value.WeeklyNotes.Directory),
+			TitlePattern:   normalizeWeeklyNoteTitlePattern(value.WeeklyNotes.TitlePattern),
+			Locale:         normalizeWeeklyNoteLocale(value.WeeklyNotes.Locale),
+			LegacyPatterns: normalizeWeeklyNoteLegacyPatterns(value.WeeklyNotes.LegacyPatterns),
+			TemplateID:     value.WeeklyNotes.TemplateID,
 		},
 		FolderIcons: folderIcons,
 	}

@@ -42,9 +42,12 @@ import { confirmApp } from '../lib/confirm-requests'
 import { promptApp } from '../lib/prompt-requests'
 import { resolveQuickNoteTitle } from "../lib/quick-note-title";
 import { recordRendererPerf } from "../lib/perf";
+import { DEFAULT_DAILY_NOTES_DIRECTORY, DEFAULT_WEEKLY_NOTES_DIRECTORY } from "@shared/ipc";
 import {
   assetFolderSubpath,
   classifyDateNote,
+  dateNoteFolderMayBelongToDatePattern,
+  dateNoteDirectoryDisplayLabel,
   folderIconKey,
   isPrimaryNotesAtRoot,
   folderForVaultRelativePath,
@@ -79,6 +82,7 @@ import {
 } from "../lib/sidebar-scroll";
 import { buildVaultSwitcherEntries } from "../lib/vault-switcher";
 import { appUpdateBadgeLabel, useAppUpdateState } from "../lib/app-update-state";
+import { getISOWeekYear } from "../lib/template-render";
 
 const ACTIVE_TAG_PARSE_DELAY_MS = 220;
 const ACTIVE_TAG_PARSE_LARGE_BODY_CHARS = 120_000;
@@ -935,6 +939,23 @@ export function Sidebar(): JSX.Element {
   // separately.
   const trees = useMemo(() => {
     const startedAt = performance.now();
+    const ds = normalizeVaultSettings(vaultSettings);
+    const dateNotePaths = new Set<string>();
+    const dateFolderSubpaths = new Set<string>();
+    if (ds.dailyNotes.enabled || ds.weeklyNotes.enabled) {
+      for (const note of notes) {
+        if (note.folder !== "inbox") continue;
+        const info = classifyDateNote(note, ds);
+        if (!info) continue;
+        dateNotePaths.add(note.path);
+        addSubpathAndAncestors(dateFolderSubpaths, noteFolderSubpath(note, ds));
+      }
+      for (const folder of allFolders) {
+        if (folder.folder !== "inbox") continue;
+        if (!dateNoteFolderMayBelongToDatePattern(folder.subpath, ds)) continue;
+        addSubpathAndAncestors(dateFolderSubpaths, folder.subpath);
+      }
+    }
     const next = {
       quick: buildTree(
         notes.filter((n) => n.folder === "quick"),
@@ -946,7 +967,7 @@ export function Sidebar(): JSX.Element {
         vaultSettings,
       ),
       inbox: buildTree(
-        notes.filter((n) => n.folder === "inbox"),
+        notes.filter((n) => n.folder === "inbox" && !dateNotePaths.has(n.path)),
         assetFiles.filter(
           (asset) => folderForVaultRelativePath(asset.path, vaultSettings) === "inbox",
         ),
@@ -973,17 +994,13 @@ export function Sidebar(): JSX.Element {
         vaultSettings,
       ),
     };
-    // Daily/Weekly directories are surfaced in their own pinned, date-grouped
-    // section above NOTES (see DateNotesNav), so drop them from the inbox tree
-    // to avoid showing them twice.
-    const ds = normalizeVaultSettings(vaultSettings);
-    const hideSubpaths = new Set<string>();
-    if (ds.dailyNotes.enabled) hideSubpaths.add(ds.dailyNotes.directory);
-    if (ds.weeklyNotes.enabled) hideSubpaths.add(ds.weeklyNotes.directory);
-    if (hideSubpaths.size) {
+    // Daily/weekly notes are surfaced in their own pinned, date-grouped section
+    // above NOTES. Remove only the empty folder spine left behind by those date
+    // notes so unrelated files under the same year/month folders remain visible.
+    if (dateFolderSubpaths.size) {
       next.inbox = {
         ...next.inbox,
-        children: next.inbox.children.filter((c) => !hideSubpaths.has(c.subpath)),
+        children: pruneEmptyDateNoteFolders(next.inbox.children, dateFolderSubpaths),
       };
     }
     recordRendererPerf("sidebar.tree-build", performance.now() - startedAt, {
@@ -1003,12 +1020,15 @@ export function Sidebar(): JSX.Element {
     const daily: { year: number; total: number; months: { month: number; notes: NoteMeta[] }[] }[] =
       [];
     const weekly: { year: number; notes: NoteMeta[] }[] = [];
+    const dailyTimes = new Map<string, number>();
+    const weeklyTimes = new Map<string, number>();
 
     if (s.dailyNotes.enabled) {
       const byYear = new Map<number, Map<number, NoteMeta[]>>();
       for (const n of notes) {
         const info = classifyDateNote(n, s);
         if (info?.kind !== "daily") continue;
+        dailyTimes.set(n.path, info.date.getTime());
         const year = info.date.getFullYear();
         const month = info.date.getMonth();
         let months = byYear.get(year);
@@ -1020,7 +1040,11 @@ export function Sidebar(): JSX.Element {
         const mlist = [...months.entries()]
           .sort((a, b) => b[0] - a[0])
           .map(([month, ns]) => {
-            ns.sort((a, b) => b.title.localeCompare(a.title));
+            ns.sort(
+              (a, b) =>
+                (dailyTimes.get(b.path) ?? 0) - (dailyTimes.get(a.path) ?? 0) ||
+                b.title.localeCompare(a.title),
+            );
             total += ns.length;
             return { month, notes: ns };
           });
@@ -1033,11 +1057,16 @@ export function Sidebar(): JSX.Element {
       for (const n of notes) {
         const info = classifyDateNote(n, s);
         if (info?.kind !== "weekly") continue;
-        const year = Number(n.title.slice(0, 4));
+        weeklyTimes.set(n.path, info.date.getTime());
+        const year = getISOWeekYear(info.date);
         (byYear.get(year) ?? byYear.set(year, []).get(year)!).push(n);
       }
       for (const [year, ns] of [...byYear.entries()].sort((a, b) => b[0] - a[0])) {
-        ns.sort((a, b) => b.title.localeCompare(a.title));
+        ns.sort(
+          (a, b) =>
+            (weeklyTimes.get(b.path) ?? 0) - (weeklyTimes.get(a.path) ?? 0) ||
+            b.title.localeCompare(a.title),
+        );
         weekly.push({ year, notes: ns });
       }
     }
@@ -1047,8 +1076,8 @@ export function Sidebar(): JSX.Element {
       weeklyEnabled: s.weeklyNotes.enabled,
       dailyDir,
       weeklyDir,
-      dailyLabel: dailyDir.split("/").pop() || dailyDir,
-      weeklyLabel: weeklyDir.split("/").pop() || weeklyDir,
+      dailyLabel: dateNoteDirectoryDisplayLabel(dailyDir, DEFAULT_DAILY_NOTES_DIRECTORY),
+      weeklyLabel: dateNoteDirectoryDisplayLabel(weeklyDir, DEFAULT_WEEKLY_NOTES_DIRECTORY),
       daily,
       weekly,
       dailyTotal: daily.reduce((sum, y) => sum + y.total, 0),
@@ -3283,6 +3312,30 @@ function buildTree(
     parent.assets.push(asset);
   }
   return root;
+}
+
+function addSubpathAndAncestors(target: Set<string>, subpath: string): void {
+  const parts = subpath.split("/").filter(Boolean);
+  let acc = "";
+  for (const part of parts) {
+    acc = acc ? `${acc}/${part}` : part;
+    target.add(acc);
+  }
+}
+
+function pruneEmptyDateNoteFolders(
+  children: TreeNode[],
+  dateFolderSubpaths: Set<string>,
+): TreeNode[] {
+  return children
+    .map((child) => ({
+      ...child,
+      children: pruneEmptyDateNoteFolders(child.children, dateFolderSubpaths),
+    }))
+    .filter((child) => {
+      if (!dateFolderSubpaths.has(child.subpath)) return true;
+      return child.notes.length > 0 || child.assets.length > 0 || child.children.length > 0;
+    });
 }
 
 function getTreeRenderEntries(

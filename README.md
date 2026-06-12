@@ -140,14 +140,29 @@ System folders still exist, but the vault model is more flexible now:
 
 The built-in folder labels are also customizable in the UI without changing the underlying internal ids.
 
-### Daily notes
+### Daily and weekly notes
 
-Daily notes are optional and can be enabled from Settings.
+Daily and weekly notes are optional and can be enabled from Settings.
 
-- when enabled, ZenNotes can open or create today's note automatically
-- the title is a simple ISO date like `2026-04-21`
-- daily notes live in a dedicated directory under your primary notes area
-- the default directory is `Daily Notes`
+- when enabled, ZenNotes can open or create today's daily note and this week's weekly note automatically
+- the default daily title is a simple ISO date like `2026-04-21`
+- the default weekly title is an ISO week title like `2026-W24`
+- date notes live in dedicated directories under your primary notes area
+- the default directories are `Daily Notes` and `Weekly Notes`
+- the directory and title can use date patterns such as `yyyy/MM-MMM` and `yyyy-MM-dd-EEE`
+- weekly title patterns can use ISO week tokens such as `yyyy-'W'ww`
+- localized month and weekday names can follow `system`, `en-US`, `pt-BR`, or another BCP 47 locale
+
+Supported date note pattern tokens:
+
+- `yyyy` / `yy` for `2026` / `26`
+- `M` / `MM` / `MMM` / `MMMM` for `6` / `06` / `Jun` / `June`
+- `d` / `dd` for `9` / `09`
+- `EEE` / `EEEE` for `Tue` / `Tuesday`
+- `w` / `ww` for ISO week numbers like `24`
+- single-quoted literals, such as `'Daily Notes'/yyyy/MM-MMM`
+
+Weekly notes render date tokens from the ISO week's Monday, and `yyyy` is the ISO week-year for weekly patterns.
 
 ### Editor and preview
 

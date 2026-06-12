@@ -138,8 +138,8 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.path])
 
-  // title -> NoteMeta for the daily/weekly notes that exist on disk.
-  const { dailyByTitle, weeklyByTitle } = useMemo(
+  // Calendar key -> NoteMeta for the daily/weekly notes that exist on disk.
+  const { dailyByDate, weeklyByWeek } = useMemo(
     () => buildDateNoteIndexes(notes, settings),
     [notes, settings]
   )
@@ -165,10 +165,10 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
         list.push(n)
       }
     }
-    for (const d of grid) push(dailyByTitle.get(isoDateStr(d)))
-    for (const { monday } of rows) push(weeklyByTitle.get(isoWeekStr(monday)))
+    for (const d of grid) push(dailyByDate.get(isoDateStr(d)))
+    for (const { monday } of rows) push(weeklyByWeek.get(isoWeekStr(monday)))
     return list
-  }, [grid, rows, dailyByTitle, weeklyByTitle])
+  }, [grid, rows, dailyByDate, weeklyByWeek])
 
   const [stats, setStats] = useState<Map<string, NoteStats>>(new Map())
   const statsRef = useRef(stats)
@@ -213,7 +213,7 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
   const handleDayClick = useCallback(
     async (day: Date, iso: string) => {
       if (!dailyEnabled) return
-      if (dailyByTitle.has(iso)) {
+      if (dailyByDate.has(iso)) {
         await openDailyNoteForDate(day)
         return
       }
@@ -225,13 +225,13 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
       })
       if (ok) await openDailyNoteForDate(day)
     },
-    [dailyEnabled, dailyByTitle, openDailyNoteForDate]
+    [dailyEnabled, dailyByDate, openDailyNoteForDate]
   )
 
   const handleWeekClick = useCallback(
     async (monday: Date, weekIso: string) => {
       if (!weeklyEnabled) return
-      if (weeklyByTitle.has(weekIso)) {
+      if (weeklyByWeek.has(weekIso)) {
         await openWeeklyNoteForDate(monday)
         return
       }
@@ -243,7 +243,7 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
       })
       if (ok) await openWeeklyNoteForDate(monday)
     },
-    [weeklyEnabled, weeklyByTitle, openWeeklyNoteForDate]
+    [weeklyEnabled, weeklyByWeek, openWeeklyNoteForDate]
   )
 
   // --- Hover preview -------------------------------------------------------
@@ -274,7 +274,7 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
       if (!dailyEnabled) return
       e.preventDefault()
       clearHover()
-      const meta = dailyByTitle.get(iso)
+      const meta = dailyByDate.get(iso)
       const items: ContextMenuItem[] = meta
         ? [
             { label: 'Open note', onSelect: () => void openDailyNoteForDate(day) },
@@ -284,14 +284,14 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
         : [{ label: `Create ${iso}`, onSelect: () => void handleDayClick(day, iso) }]
       setMenu({ x: e.clientX, y: e.clientY, items })
     },
-    [dailyEnabled, dailyByTitle, openDailyNoteForDate, handleDayClick, trashNote, clearHover]
+    [dailyEnabled, dailyByDate, openDailyNoteForDate, handleDayClick, trashNote, clearHover]
   )
   const openWeekMenu = useCallback(
     (e: React.MouseEvent, monday: Date, weekIso: string) => {
       if (!weeklyEnabled) return
       e.preventDefault()
       clearHover()
-      const meta = weeklyByTitle.get(weekIso)
+      const meta = weeklyByWeek.get(weekIso)
       const items: ContextMenuItem[] = meta
         ? [
             { label: 'Open note', onSelect: () => void openWeeklyNoteForDate(monday) },
@@ -306,7 +306,7 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
           ]
       setMenu({ x: e.clientX, y: e.clientY, items })
     },
-    [weeklyEnabled, weeklyByTitle, openWeeklyNoteForDate, handleWeekClick, trashNote, clearHover]
+    [weeklyEnabled, weeklyByWeek, openWeeklyNoteForDate, handleWeekClick, trashNote, clearHover]
   )
 
   const atRefMonth =
@@ -408,7 +408,7 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
             const weekIso = isoWeekStr(monday)
             const weekNum = getISOWeek(monday)
             const isActiveWeek = weekIso === activeWeekIso
-            const weekMeta = weeklyByTitle.get(weekIso)
+            const weekMeta = weeklyByWeek.get(weekIso)
             const weekDots = dotsFor(weekMeta ? stats.get(weekMeta.path) : undefined)
             const weekTasks = weekMeta ? stats.get(weekMeta.path)?.openTasks ?? 0 : 0
 
@@ -457,7 +457,7 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
               const inMonth = day.getMonth() === anchorMonth
               const isActiveDay = iso === activeDayIso
               const isToday = iso === todayIso
-              const dayMeta = dailyByTitle.get(iso)
+              const dayMeta = dailyByDate.get(iso)
               const dayStats = dayMeta ? stats.get(dayMeta.path) : undefined
               const dots = dotsFor(dayStats)
               const openTasks = dayStats?.openTasks ?? 0

@@ -245,16 +245,39 @@ export type FolderIconId =
   | 'chart'
   | 'home'
 
+export interface DateNotePatternSettings {
+  /** Directory or date-based directory pattern inside the primary notes area. */
+  directory: string
+  /** Date-based title/filename pattern. */
+  titlePattern?: string
+  /** BCP 47 locale used for localized pattern tokens. `system` = OS/browser locale. */
+  locale?: string
+}
+
 export interface DailyNotesSettings {
   enabled: boolean
+  /** Directory or date-based directory pattern inside the primary notes area. */
   directory: string
+  /** Date-based title/filename pattern for new daily notes. */
+  titlePattern?: string
+  /** BCP 47 locale used for localized pattern tokens. `system` = OS/browser locale. */
+  locale?: string
+  /** Prior patterns used only to recognize existing daily notes after settings changes. */
+  legacyPatterns?: DateNotePatternSettings[]
   /** Template applied to new daily notes. Empty/undefined = blank note. */
   templateId?: string
 }
 
 export interface WeeklyNotesSettings {
   enabled: boolean
+  /** Directory or date-based directory pattern inside the primary notes area. */
   directory: string
+  /** Date-based title/filename pattern for new weekly notes. */
+  titlePattern?: string
+  /** BCP 47 locale used for localized pattern tokens. `system` = OS/browser locale. */
+  locale?: string
+  /** Prior patterns used only to recognize existing weekly notes after settings changes. */
+  legacyPatterns?: DateNotePatternSettings[]
   /** Template applied to new weekly notes. Empty/undefined = blank note. */
   templateId?: string
 }
@@ -267,17 +290,25 @@ export interface VaultSettings {
 }
 
 export const DEFAULT_DAILY_NOTES_DIRECTORY = 'Daily Notes'
+export const DEFAULT_DAILY_NOTE_TITLE_PATTERN = 'yyyy-MM-dd'
+export const DEFAULT_DAILY_NOTE_LOCALE = 'system'
 export const DEFAULT_WEEKLY_NOTES_DIRECTORY = 'Weekly Notes'
+export const DEFAULT_WEEKLY_NOTE_TITLE_PATTERN = "yyyy-'W'ww"
+export const DEFAULT_WEEKLY_NOTE_LOCALE = 'system'
 
 export const DEFAULT_VAULT_SETTINGS: VaultSettings = {
   primaryNotesLocation: 'inbox',
   dailyNotes: {
     enabled: false,
-    directory: DEFAULT_DAILY_NOTES_DIRECTORY
+    directory: DEFAULT_DAILY_NOTES_DIRECTORY,
+    titlePattern: DEFAULT_DAILY_NOTE_TITLE_PATTERN,
+    locale: DEFAULT_DAILY_NOTE_LOCALE
   },
   weeklyNotes: {
     enabled: false,
-    directory: DEFAULT_WEEKLY_NOTES_DIRECTORY
+    directory: DEFAULT_WEEKLY_NOTES_DIRECTORY,
+    titlePattern: DEFAULT_WEEKLY_NOTE_TITLE_PATTERN,
+    locale: DEFAULT_WEEKLY_NOTE_LOCALE
   },
   folderIcons: {}
 }

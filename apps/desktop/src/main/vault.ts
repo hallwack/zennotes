@@ -12,7 +12,11 @@ import {
   type RenameNoteRef
 } from './wikilink-rename'
 import {
+  DEFAULT_DAILY_NOTE_LOCALE,
+  DEFAULT_DAILY_NOTE_TITLE_PATTERN,
   DEFAULT_DAILY_NOTES_DIRECTORY,
+  DEFAULT_WEEKLY_NOTE_LOCALE,
+  DEFAULT_WEEKLY_NOTE_TITLE_PATTERN,
   DEFAULT_WEEKLY_NOTES_DIRECTORY,
   AssetMeta,
   DeletedAsset,
@@ -137,11 +141,15 @@ const DEFAULT_VAULT_SETTINGS: VaultSettings = {
   primaryNotesLocation: 'inbox',
   dailyNotes: {
     enabled: false,
-    directory: DEFAULT_DAILY_NOTES_DIRECTORY
+    directory: DEFAULT_DAILY_NOTES_DIRECTORY,
+    titlePattern: DEFAULT_DAILY_NOTE_TITLE_PATTERN,
+    locale: DEFAULT_DAILY_NOTE_LOCALE
   },
   weeklyNotes: {
     enabled: false,
-    directory: DEFAULT_WEEKLY_NOTES_DIRECTORY
+    directory: DEFAULT_WEEKLY_NOTES_DIRECTORY,
+    titlePattern: DEFAULT_WEEKLY_NOTE_TITLE_PATTERN,
+    locale: DEFAULT_WEEKLY_NOTE_LOCALE
   },
   folderIcons: {}
 }
@@ -677,11 +685,17 @@ function cloneVaultSettings(settings: VaultSettings): VaultSettings {
     dailyNotes: {
       enabled: settings.dailyNotes.enabled,
       directory: settings.dailyNotes.directory,
+      titlePattern: settings.dailyNotes.titlePattern,
+      locale: settings.dailyNotes.locale,
+      legacyPatterns: settings.dailyNotes.legacyPatterns?.map((pattern) => ({ ...pattern })),
       templateId: settings.dailyNotes.templateId
     },
     weeklyNotes: {
       enabled: settings.weeklyNotes.enabled,
       directory: settings.weeklyNotes.directory,
+      titlePattern: settings.weeklyNotes.titlePattern,
+      locale: settings.weeklyNotes.locale,
+      legacyPatterns: settings.weeklyNotes.legacyPatterns?.map((pattern) => ({ ...pattern })),
       templateId: settings.weeklyNotes.templateId
     },
     folderIcons: { ...settings.folderIcons }
@@ -694,6 +708,30 @@ function normalizeDailyNotesDirectory(value: unknown): string {
   return trimmed || DEFAULT_DAILY_NOTES_DIRECTORY
 }
 
+function normalizeDailyNoteTitlePattern(value: unknown): string {
+  if (typeof value !== 'string') return DEFAULT_DAILY_NOTE_TITLE_PATTERN
+  const trimmed = value.trim().replace(/[\\/]+/g, '-')
+  return trimmed || DEFAULT_DAILY_NOTE_TITLE_PATTERN
+}
+
+function normalizeDailyNoteLocale(value: unknown): string {
+  if (typeof value !== 'string') return DEFAULT_DAILY_NOTE_LOCALE
+  const trimmed = value.trim()
+  return trimmed || DEFAULT_DAILY_NOTE_LOCALE
+}
+
+function normalizeWeeklyNoteTitlePattern(value: unknown): string {
+  if (typeof value !== 'string') return DEFAULT_WEEKLY_NOTE_TITLE_PATTERN
+  const trimmed = value.trim().replace(/[\\/]+/g, '-')
+  return trimmed || DEFAULT_WEEKLY_NOTE_TITLE_PATTERN
+}
+
+function normalizeWeeklyNoteLocale(value: unknown): string {
+  if (typeof value !== 'string') return DEFAULT_WEEKLY_NOTE_LOCALE
+  const trimmed = value.trim()
+  return trimmed || DEFAULT_WEEKLY_NOTE_LOCALE
+}
+
 function normalizeWeeklyNotesDirectory(value: unknown): string {
   if (typeof value !== 'string') return DEFAULT_WEEKLY_NOTES_DIRECTORY
   const trimmed = value.trim().replace(/^\/+|\/+$/g, '')
@@ -704,6 +742,46 @@ function normalizeTemplateId(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
   return trimmed || undefined
+}
+
+function normalizeDailyNoteLegacyPatterns(value: unknown): VaultSettings['dailyNotes']['legacyPatterns'] {
+  if (!Array.isArray(value)) return []
+  const out: NonNullable<VaultSettings['dailyNotes']['legacyPatterns']> = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue
+    const pattern = item as { directory?: unknown; titlePattern?: unknown; locale?: unknown }
+    const next = {
+      directory: normalizeDailyNotesDirectory(pattern.directory),
+      titlePattern: normalizeDailyNoteTitlePattern(pattern.titlePattern),
+      locale: normalizeDailyNoteLocale(pattern.locale)
+    }
+    const key = `${next.directory}\0${next.titlePattern}\0${next.locale}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(next)
+  }
+  return out
+}
+
+function normalizeWeeklyNoteLegacyPatterns(value: unknown): VaultSettings['weeklyNotes']['legacyPatterns'] {
+  if (!Array.isArray(value)) return []
+  const out: NonNullable<VaultSettings['weeklyNotes']['legacyPatterns']> = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue
+    const pattern = item as { directory?: unknown; titlePattern?: unknown; locale?: unknown }
+    const next = {
+      directory: normalizeWeeklyNotesDirectory(pattern.directory),
+      titlePattern: normalizeWeeklyNoteTitlePattern(pattern.titlePattern),
+      locale: normalizeWeeklyNoteLocale(pattern.locale)
+    }
+    const key = `${next.directory}\0${next.titlePattern}\0${next.locale}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(next)
+  }
+  return out
 }
 
 function normalizePrimaryNotesLocation(value: unknown): PrimaryNotesLocation {
@@ -719,19 +797,37 @@ function normalizeVaultSettings(
       primaryNotesLocation: fallbackPrimary,
       dailyNotes: {
         enabled: DEFAULT_VAULT_SETTINGS.dailyNotes.enabled,
-        directory: DEFAULT_DAILY_NOTES_DIRECTORY
+        directory: DEFAULT_DAILY_NOTES_DIRECTORY,
+        titlePattern: DEFAULT_DAILY_NOTE_TITLE_PATTERN,
+        locale: DEFAULT_DAILY_NOTE_LOCALE
       },
       weeklyNotes: {
         enabled: DEFAULT_VAULT_SETTINGS.weeklyNotes.enabled,
-        directory: DEFAULT_WEEKLY_NOTES_DIRECTORY
+        directory: DEFAULT_WEEKLY_NOTES_DIRECTORY,
+        titlePattern: DEFAULT_WEEKLY_NOTE_TITLE_PATTERN,
+        locale: DEFAULT_WEEKLY_NOTE_LOCALE
       },
       folderIcons: {}
     }
   }
   const candidate = value as {
     primaryNotesLocation?: unknown
-    dailyNotes?: { enabled?: unknown; directory?: unknown; templateId?: unknown } | null
-    weeklyNotes?: { enabled?: unknown; directory?: unknown; templateId?: unknown } | null
+    dailyNotes?: {
+      enabled?: unknown
+      directory?: unknown
+      titlePattern?: unknown
+      locale?: unknown
+      legacyPatterns?: unknown
+      templateId?: unknown
+    } | null
+    weeklyNotes?: {
+      enabled?: unknown
+      directory?: unknown
+      titlePattern?: unknown
+      locale?: unknown
+      legacyPatterns?: unknown
+      templateId?: unknown
+    } | null
     folderIcons?: Record<string, unknown> | null
   }
   const folderIcons: Record<string, FolderIconId> = {}
@@ -751,6 +847,9 @@ function normalizeVaultSettings(
           ? candidate.dailyNotes.enabled
           : DEFAULT_VAULT_SETTINGS.dailyNotes.enabled,
       directory: normalizeDailyNotesDirectory(candidate.dailyNotes?.directory),
+      titlePattern: normalizeDailyNoteTitlePattern(candidate.dailyNotes?.titlePattern),
+      locale: normalizeDailyNoteLocale(candidate.dailyNotes?.locale),
+      legacyPatterns: normalizeDailyNoteLegacyPatterns(candidate.dailyNotes?.legacyPatterns),
       templateId: normalizeTemplateId(candidate.dailyNotes?.templateId)
     },
     weeklyNotes: {
@@ -759,6 +858,9 @@ function normalizeVaultSettings(
           ? candidate.weeklyNotes.enabled
           : DEFAULT_VAULT_SETTINGS.weeklyNotes.enabled,
       directory: normalizeWeeklyNotesDirectory(candidate.weeklyNotes?.directory),
+      titlePattern: normalizeWeeklyNoteTitlePattern(candidate.weeklyNotes?.titlePattern),
+      locale: normalizeWeeklyNoteLocale(candidate.weeklyNotes?.locale),
+      legacyPatterns: normalizeWeeklyNoteLegacyPatterns(candidate.weeklyNotes?.legacyPatterns),
       templateId: normalizeTemplateId(candidate.weeklyNotes?.templateId)
     },
     folderIcons

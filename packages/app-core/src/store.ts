@@ -3,6 +3,7 @@ import type { EditorView } from '@codemirror/view'
 import { DEFAULT_VAULT_SETTINGS } from '@shared/ipc'
 import type {
   AssetMeta,
+  DateNotePatternSettings,
   DeletedAsset,
   FolderEntry,
   LocalVaultEntry,
@@ -72,14 +73,15 @@ import {
 } from './lib/workspace-tabs'
 import {
   duplicateFolderIcons,
+  dailyNoteLocationForDate,
   folderForVaultRelativePath,
-  findDateNoteByTitle,
+  findDailyNoteForDate,
+  findWeeklyNoteForDate,
   isPrimaryNotesAtRoot,
   removeFolderIcons,
   normalizeVaultSettings,
   noteFolderSubpath,
-  noteTitleForDate,
-  weeklyNoteTitle,
+  weeklyNoteLocationForDate,
   rewriteFolderIconsForRename
 } from './lib/vault-layout'
 import { renderTemplate, renderTitle } from './lib/template-render'
@@ -2145,6 +2147,87 @@ function renameNoteState(
   }
 }
 
+const MAX_DATE_NOTE_PATTERN_HISTORY = 20
+
+function dateNotePatternKey(pattern: DateNotePatternSettings): string {
+  return `${pattern.directory}\0${pattern.titlePattern ?? ''}\0${pattern.locale ?? ''}`
+}
+
+function currentDailyPatternFromSettings(settings: VaultSettings): DateNotePatternSettings {
+  return {
+    directory: settings.dailyNotes.directory,
+    titlePattern: settings.dailyNotes.titlePattern,
+    locale: settings.dailyNotes.locale
+  }
+}
+
+function currentWeeklyPatternFromSettings(settings: VaultSettings): DateNotePatternSettings {
+  return {
+    directory: settings.weeklyNotes.directory,
+    titlePattern: settings.weeklyNotes.titlePattern,
+    locale: settings.weeklyNotes.locale
+  }
+}
+
+function appendDateNotePatternHistory(
+  history: readonly DateNotePatternSettings[] | undefined,
+  previous: DateNotePatternSettings,
+  current: DateNotePatternSettings
+): DateNotePatternSettings[] {
+  const out: DateNotePatternSettings[] = []
+  const seen = new Set([dateNotePatternKey(current)])
+  for (const pattern of [previous, ...(history ?? [])]) {
+    const key = dateNotePatternKey(pattern)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(pattern)
+    if (out.length >= MAX_DATE_NOTE_PATTERN_HISTORY) break
+  }
+  return out
+}
+
+function withDateNotePatternHistory(
+  previousSettings: VaultSettings,
+  requestedSettings: VaultSettings
+): VaultSettings {
+  const previous = normalizeVaultSettings(previousSettings)
+  const next = normalizeVaultSettings(requestedSettings)
+  const previousDaily = currentDailyPatternFromSettings(previous)
+  const nextDaily = currentDailyPatternFromSettings(next)
+  const previousWeekly = currentWeeklyPatternFromSettings(previous)
+  const nextWeekly = currentWeeklyPatternFromSettings(next)
+
+  return {
+    ...next,
+    dailyNotes: {
+      ...next.dailyNotes,
+      legacyPatterns:
+        previous.dailyNotes.enabled &&
+        next.dailyNotes.enabled &&
+        dateNotePatternKey(previousDaily) !== dateNotePatternKey(nextDaily)
+          ? appendDateNotePatternHistory(
+              next.dailyNotes.legacyPatterns,
+              previousDaily,
+              nextDaily
+            )
+          : next.dailyNotes.legacyPatterns
+    },
+    weeklyNotes: {
+      ...next.weeklyNotes,
+      legacyPatterns:
+        previous.weeklyNotes.enabled &&
+        next.weeklyNotes.enabled &&
+        dateNotePatternKey(previousWeekly) !== dateNotePatternKey(nextWeekly)
+          ? appendDateNotePatternHistory(
+              next.weeklyNotes.legacyPatterns,
+              previousWeekly,
+              nextWeekly
+            )
+          : next.weeklyNotes.legacyPatterns
+    }
+  }
+}
+
 function rewriteNoteCommentsPath(
   comments: Record<string, NoteComment[]>,
   oldPath: string,
@@ -2772,7 +2855,8 @@ export const useStore = create<Store>((set, get) => {
     }),
   setVaultSettings: async (next) => {
     try {
-      const settings = normalizeVaultSettings(await window.zen.setVaultSettings(next))
+      const settingsToSave = withDateNotePatternHistory(get().vaultSettings, next)
+      const settings = normalizeVaultSettings(await window.zen.setVaultSettings(settingsToSave))
       set({
         vaultSettings: settings
       })
@@ -4346,9 +4430,8 @@ export const useStore = create<Store>((set, get) => {
     const state = get()
     const settings = normalizeVaultSettings(state.vaultSettings)
     if (!settings.dailyNotes.enabled) return
-    const title = noteTitleForDate(date)
-    const subpath = settings.dailyNotes.directory
-    const existing = findDateNoteByTitle(state.notes, settings, 'daily', title)
+    const { title, subpath } = dailyNoteLocationForDate(date, settings)
+    const existing = findDailyNoteForDate(state.notes, settings, date)
     if (existing) {
       set({ view: { kind: 'folder', folder: 'inbox', subpath } })
       await get().selectNote(existing.path)
@@ -4370,9 +4453,8 @@ export const useStore = create<Store>((set, get) => {
     const state = get()
     const settings = normalizeVaultSettings(state.vaultSettings)
     if (!settings.weeklyNotes.enabled) return
-    const title = weeklyNoteTitle(date)
-    const subpath = settings.weeklyNotes.directory
-    const existing = findDateNoteByTitle(state.notes, settings, 'weekly', title)
+    const { title, subpath } = weeklyNoteLocationForDate(date, settings)
+    const existing = findWeeklyNoteForDate(state.notes, settings, date)
     if (existing) {
       set({ view: { kind: 'folder', folder: 'inbox', subpath } })
       await get().selectNote(existing.path)

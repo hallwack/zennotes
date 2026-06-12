@@ -138,6 +138,212 @@ describe('tasks cache freshness', () => {
   })
 })
 
+describe('daily note patterns', () => {
+  it('creates daily notes using the configured directory and title patterns', async () => {
+    const created = {
+      ...makeNote(''),
+      path: 'inbox/2026/06-Jun/2026-06-09-Tue.md',
+      title: '2026-06-09-Tue'
+    }
+    const createNote = vi.fn().mockResolvedValue(created)
+    installZen({
+      createNote,
+      listNotes: vi.fn().mockResolvedValue([created]),
+      readNote: vi.fn().mockResolvedValue({ ...created, body: '' })
+    })
+
+    const { useStore } = await loadStore()
+    useStore.setState({
+      notes: [],
+      customTemplates: [],
+      vaultSettings: {
+        primaryNotesLocation: 'inbox',
+        dailyNotes: {
+          enabled: true,
+          directory: 'yyyy/MM-MMM',
+          titlePattern: 'yyyy-MM-dd-EEE',
+          locale: 'en-US'
+        },
+        weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+        folderIcons: {}
+      }
+    })
+
+    await useStore.getState().openDailyNoteForDate(new Date(2026, 5, 9))
+
+    expect(createNote).toHaveBeenCalledWith('inbox', '2026-06-09-Tue', '2026/06-Jun')
+  })
+})
+
+describe('weekly note patterns', () => {
+  it('creates weekly notes using the configured directory and title patterns', async () => {
+    const created = {
+      ...makeNote(''),
+      path: 'inbox/2026/06-Jun/2026-W24-Mon.md',
+      title: '2026-W24-Mon'
+    }
+    const createNote = vi.fn().mockResolvedValue(created)
+    installZen({
+      createNote,
+      listNotes: vi.fn().mockResolvedValue([created]),
+      readNote: vi.fn().mockResolvedValue({ ...created, body: '' })
+    })
+
+    const { useStore } = await loadStore()
+    useStore.setState({
+      notes: [],
+      customTemplates: [],
+      vaultSettings: {
+        primaryNotesLocation: 'inbox',
+        dailyNotes: { enabled: false, directory: 'Daily Notes' },
+        weeklyNotes: {
+          enabled: true,
+          directory: 'yyyy/MM-MMM',
+          titlePattern: "yyyy-'W'ww-EEE",
+          locale: 'en-US'
+        },
+        folderIcons: {}
+      }
+    })
+
+    await useStore.getState().openWeeklyNoteForDate(new Date(2026, 5, 9))
+
+    expect(createNote).toHaveBeenCalledWith('inbox', '2026-W24-Mon', '2026/06-Jun')
+  })
+})
+
+describe('date note pattern history', () => {
+  it('keeps existing daily notes dynamic when the daily pattern changes', async () => {
+    const oldSettings = {
+      primaryNotesLocation: 'inbox' as const,
+      dailyNotes: {
+        enabled: true,
+        directory: 'Daily Notes',
+        titlePattern: 'yyyy-MM-dd',
+        locale: 'en-US'
+      },
+      weeklyNotes: { enabled: false, directory: 'Weekly Notes' },
+      folderIcons: {}
+    }
+    const nextSettings = {
+      ...oldSettings,
+      dailyNotes: {
+        ...oldSettings.dailyNotes,
+        directory: 'yyyy/MM-MMM',
+        titlePattern: 'yyyy-MM-dd-EEE'
+      }
+    }
+    const existing = {
+      ...makeNote('daily'),
+      path: 'inbox/Daily Notes/2026-06-12.md',
+      title: '2026-06-12',
+      body: '# 2026-06-12\n'
+    }
+    const setVaultSettings = vi.fn().mockImplementation(async (settings) => settings)
+    const moveNote = vi.fn()
+    const renameNote = vi.fn()
+    const createNote = vi.fn()
+    installZen({
+      setVaultSettings,
+      moveNote,
+      renameNote,
+      createNote,
+      listNotes: vi.fn().mockResolvedValue([existing]),
+      readNote: vi.fn().mockResolvedValue(existing)
+    })
+
+    const { useStore } = await loadStore()
+    useStore.setState({
+      notes: [existing],
+      vaultSettings: oldSettings
+    })
+
+    await useStore.getState().setVaultSettings(nextSettings)
+    await useStore.getState().openDailyNoteForDate(new Date(2026, 5, 12))
+
+    expect(setVaultSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dailyNotes: expect.objectContaining({
+          directory: 'yyyy/MM-MMM',
+          titlePattern: 'yyyy-MM-dd-EEE',
+          legacyPatterns: [
+            { directory: 'Daily Notes', titlePattern: 'yyyy-MM-dd', locale: 'en-US' }
+          ]
+        })
+      })
+    )
+    expect(moveNote).not.toHaveBeenCalled()
+    expect(renameNote).not.toHaveBeenCalled()
+    expect(createNote).not.toHaveBeenCalled()
+    expect(useStore.getState().selectedPath).toBe(existing.path)
+  })
+
+  it('keeps existing weekly notes dynamic when the weekly pattern changes', async () => {
+    const oldSettings = {
+      primaryNotesLocation: 'inbox' as const,
+      dailyNotes: { enabled: false, directory: 'Daily Notes' },
+      weeklyNotes: {
+        enabled: true,
+        directory: 'Weekly Notes',
+        titlePattern: "yyyy-'W'ww",
+        locale: 'en-US'
+      },
+      folderIcons: {}
+    }
+    const nextSettings = {
+      ...oldSettings,
+      weeklyNotes: {
+        ...oldSettings.weeklyNotes,
+        directory: 'yyyy/MM-MMM',
+        titlePattern: "yyyy-'W'ww-EEE"
+      }
+    }
+    const existing = {
+      ...makeNote('weekly'),
+      path: 'inbox/Weekly Notes/2026-W24.md',
+      title: '2026-W24',
+      body: '# 2026-W24\n'
+    }
+    const setVaultSettings = vi.fn().mockImplementation(async (settings) => settings)
+    const moveNote = vi.fn()
+    const renameNote = vi.fn()
+    const createNote = vi.fn()
+    installZen({
+      setVaultSettings,
+      moveNote,
+      renameNote,
+      createNote,
+      listNotes: vi.fn().mockResolvedValue([existing]),
+      readNote: vi.fn().mockResolvedValue(existing)
+    })
+
+    const { useStore } = await loadStore()
+    useStore.setState({
+      notes: [existing],
+      vaultSettings: oldSettings
+    })
+
+    await useStore.getState().setVaultSettings(nextSettings)
+    await useStore.getState().openWeeklyNoteForDate(new Date(2026, 5, 12))
+
+    expect(setVaultSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        weeklyNotes: expect.objectContaining({
+          directory: 'yyyy/MM-MMM',
+          titlePattern: "yyyy-'W'ww-EEE",
+          legacyPatterns: [
+            { directory: 'Weekly Notes', titlePattern: "yyyy-'W'ww", locale: 'en-US' }
+          ]
+        })
+      })
+    )
+    expect(moveNote).not.toHaveBeenCalled()
+    expect(renameNote).not.toHaveBeenCalled()
+    expect(createNote).not.toHaveBeenCalled()
+    expect(useStore.getState().selectedPath).toBe(existing.path)
+  })
+})
+
 describe('local vault shortcuts', () => {
   it('stores known local vaults for the sidebar switcher', async () => {
     const localVaults = [
