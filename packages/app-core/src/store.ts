@@ -73,9 +73,8 @@ import {
 import {
   duplicateFolderIcons,
   folderForVaultRelativePath,
+  findDateNoteByTitle,
   isPrimaryNotesAtRoot,
-  normalizeDailyNotesDirectory,
-  normalizeWeeklyNotesDirectory,
   removeFolderIcons,
   normalizeVaultSettings,
   noteFolderSubpath,
@@ -4348,13 +4347,8 @@ export const useStore = create<Store>((set, get) => {
     const settings = normalizeVaultSettings(state.vaultSettings)
     if (!settings.dailyNotes.enabled) return
     const title = noteTitleForDate(date)
-    const subpath = normalizeDailyNotesDirectory(settings.dailyNotes.directory)
-    const existing = state.notes.find(
-      (note) =>
-        note.folder === 'inbox' &&
-        note.title === title &&
-        noteFolderSubpath(note, settings) === subpath
-    )
+    const subpath = settings.dailyNotes.directory
+    const existing = findDateNoteByTitle(state.notes, settings, 'daily', title)
     if (existing) {
       set({ view: { kind: 'folder', folder: 'inbox', subpath } })
       await get().selectNote(existing.path)
@@ -4377,13 +4371,8 @@ export const useStore = create<Store>((set, get) => {
     const settings = normalizeVaultSettings(state.vaultSettings)
     if (!settings.weeklyNotes.enabled) return
     const title = weeklyNoteTitle(date)
-    const subpath = normalizeWeeklyNotesDirectory(settings.weeklyNotes.directory)
-    const existing = state.notes.find(
-      (note) =>
-        note.folder === 'inbox' &&
-        note.title === title &&
-        noteFolderSubpath(note, settings) === subpath
-    )
+    const subpath = settings.weeklyNotes.directory
+    const existing = findDateNoteByTitle(state.notes, settings, 'weekly', title)
     if (existing) {
       set({ view: { kind: 'folder', folder: 'inbox', subpath } })
       await get().selectNote(existing.path)

@@ -44,6 +44,7 @@ import { resolveQuickNoteTitle } from "../lib/quick-note-title";
 import { recordRendererPerf } from "../lib/perf";
 import {
   assetFolderSubpath,
+  classifyDateNote,
   folderIconKey,
   isPrimaryNotesAtRoot,
   folderForVaultRelativePath,
@@ -1006,12 +1007,10 @@ export function Sidebar(): JSX.Element {
     if (s.dailyNotes.enabled) {
       const byYear = new Map<number, Map<number, NoteMeta[]>>();
       for (const n of notes) {
-        if (n.folder !== "inbox") continue;
-        if (noteFolderSubpath(n, vaultSettings) !== dailyDir) continue;
-        const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(n.title);
-        if (!m) continue;
-        const year = Number(m[1]);
-        const month = Number(m[2]) - 1;
+        const info = classifyDateNote(n, s);
+        if (info?.kind !== "daily") continue;
+        const year = info.date.getFullYear();
+        const month = info.date.getMonth();
         let months = byYear.get(year);
         if (!months) byYear.set(year, (months = new Map()));
         (months.get(month) ?? months.set(month, []).get(month)!).push(n);
@@ -1032,9 +1031,8 @@ export function Sidebar(): JSX.Element {
     if (s.weeklyNotes.enabled) {
       const byYear = new Map<number, NoteMeta[]>();
       for (const n of notes) {
-        if (n.folder !== "inbox") continue;
-        if (noteFolderSubpath(n, vaultSettings) !== weeklyDir) continue;
-        if (!/^\d{4}-W\d{2}$/.test(n.title)) continue;
+        const info = classifyDateNote(n, s);
+        if (info?.kind !== "weekly") continue;
         const year = Number(n.title.slice(0, 4));
         (byYear.get(year) ?? byYear.set(year, []).get(year)!).push(n);
       }

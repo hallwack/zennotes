@@ -70,6 +70,15 @@ export function normalizeWeeklyNotesDirectory(directory: string | null | undefin
   return trimmed || DEFAULT_WEEKLY_NOTES_DIRECTORY
 }
 
+function normalizePrimaryRelativeSubpath(
+  subpath: string,
+  settings: Pick<VaultSettings, 'primaryNotesLocation'>
+): string {
+  if (settings.primaryNotesLocation !== 'inbox') return subpath
+  if (subpath === 'inbox') return ''
+  return subpath.startsWith('inbox/') ? subpath.slice('inbox/'.length) : subpath
+}
+
 function normalizeTemplateId(value: string | null | undefined): string | undefined {
   const trimmed = (value ?? '').trim()
   return trimmed || undefined
@@ -86,19 +95,29 @@ export function normalizeVaultSettings(
       normalizedFolderIcons[key] = value
     }
   }
+  const primaryNotesLocation =
+    settings?.primaryNotesLocation === 'root'
+      ? 'root'
+      : DEFAULT_VAULT_SETTINGS.primaryNotesLocation
+  const dailyDirectory = normalizePrimaryRelativeSubpath(
+    normalizeDailyNotesDirectory(settings?.dailyNotes?.directory),
+    { primaryNotesLocation }
+  )
+  const weeklyDirectory = normalizePrimaryRelativeSubpath(
+    normalizeWeeklyNotesDirectory(settings?.weeklyNotes?.directory),
+    { primaryNotesLocation }
+  )
+
   return {
-    primaryNotesLocation:
-      settings?.primaryNotesLocation === 'root'
-        ? 'root'
-        : DEFAULT_VAULT_SETTINGS.primaryNotesLocation,
+    primaryNotesLocation,
     dailyNotes: {
       enabled: !!settings?.dailyNotes?.enabled,
-      directory: normalizeDailyNotesDirectory(settings?.dailyNotes?.directory),
+      directory: dailyDirectory,
       templateId: normalizeTemplateId(settings?.dailyNotes?.templateId)
     },
     weeklyNotes: {
       enabled: !!settings?.weeklyNotes?.enabled,
-      directory: normalizeWeeklyNotesDirectory(settings?.weeklyNotes?.directory),
+      directory: weeklyDirectory,
       templateId: normalizeTemplateId(settings?.weeklyNotes?.templateId)
     },
     folderIcons: normalizedFolderIcons
@@ -233,7 +252,9 @@ export function classifyDateNote(
   settings: VaultSettings | null | undefined
 ): DateNoteInfo | null {
   const normalized = normalizeVaultSettings(settings)
-  const subpath = noteFolderSubpath(note, settings)
+  if (note.folder !== 'inbox') return null
+
+  const subpath = noteFolderSubpath(note, normalized)
 
   if (normalized.dailyNotes.enabled && subpath === normalized.dailyNotes.directory) {
     const m = DAILY_TITLE_RE.exec(note.title)
@@ -251,6 +272,42 @@ export function classifyDateNote(
     }
   }
 
+  return null
+}
+
+export interface DateNoteIndexes {
+  dailyByTitle: Map<string, NoteMeta>
+  weeklyByTitle: Map<string, NoteMeta>
+}
+
+export function buildDateNoteIndexes(
+  notes: readonly NoteMeta[],
+  settings: VaultSettings | null | undefined
+): DateNoteIndexes {
+  const dailyByTitle = new Map<string, NoteMeta>()
+  const weeklyByTitle = new Map<string, NoteMeta>()
+
+  for (const note of notes) {
+    const info = classifyDateNote(note, settings)
+    if (!info) continue
+    if (info.kind === 'daily') dailyByTitle.set(note.title, note)
+    else weeklyByTitle.set(note.title, note)
+  }
+
+  return { dailyByTitle, weeklyByTitle }
+}
+
+export function findDateNoteByTitle(
+  notes: readonly NoteMeta[],
+  settings: VaultSettings | null | undefined,
+  kind: DateNoteInfo['kind'],
+  title: string
+): NoteMeta | null {
+  for (const note of notes) {
+    if (note.title !== title) continue
+    const info = classifyDateNote(note, settings)
+    if (info?.kind === kind) return note
+  }
   return null
 }
 

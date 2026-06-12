@@ -17,8 +17,8 @@ import type { NoteContent, NoteMeta } from '@shared/ipc'
 import { parseTasksFromBody } from '@shared/tasks'
 import { useStore } from '../store'
 import {
+  buildDateNoteIndexes,
   classifyDateNote,
-  noteFolderSubpath,
   normalizeVaultSettings,
   weeklyNoteTitle,
 } from '../lib/vault-layout'
@@ -32,8 +32,6 @@ import { PanelResizeHandle } from './PanelResizeHandle'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 
 const FULL_DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const DAILY_RE = /^\d{4}-\d{2}-\d{2}$/
-const WEEKLY_RE = /^\d{4}-W\d{2}$/
 const WORDS_PER_DOT = 80
 const MAX_DOTS = 3
 const HOVER_DELAY_MS = 280
@@ -111,8 +109,6 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
   const settings = useMemo(() => normalizeVaultSettings(vaultSettings), [vaultSettings])
   const dailyEnabled = settings.dailyNotes.enabled
   const weeklyEnabled = settings.weeklyNotes.enabled
-  const dailySubpath = settings.dailyNotes.directory
-  const weeklySubpath = settings.weeklyNotes.directory
 
   const firstDay = weekStart === 'sunday' ? 0 : weekStart === 'locale' ? localeFirstDay() : 1
   const dayLabels = useMemo(
@@ -143,27 +139,10 @@ export function CalendarPanel({ note }: { note: NoteContent }): JSX.Element {
   }, [note.path])
 
   // title -> NoteMeta for the daily/weekly notes that exist on disk.
-  const dailyByTitle = useMemo(() => {
-    const m = new Map<string, NoteMeta>()
-    if (!dailyEnabled) return m
-    for (const n of notes) {
-      if (n.folder !== 'inbox') continue
-      if (noteFolderSubpath(n, settings) !== dailySubpath) continue
-      if (DAILY_RE.test(n.title)) m.set(n.title, n)
-    }
-    return m
-  }, [notes, settings, dailyEnabled, dailySubpath])
-
-  const weeklyByTitle = useMemo(() => {
-    const m = new Map<string, NoteMeta>()
-    if (!weeklyEnabled) return m
-    for (const n of notes) {
-      if (n.folder !== 'inbox') continue
-      if (noteFolderSubpath(n, settings) !== weeklySubpath) continue
-      if (WEEKLY_RE.test(n.title)) m.set(n.title, n)
-    }
-    return m
-  }, [notes, settings, weeklyEnabled, weeklySubpath])
+  const { dailyByTitle, weeklyByTitle } = useMemo(
+    () => buildDateNoteIndexes(notes, settings),
+    [notes, settings]
+  )
 
   const grid = useMemo(() => buildGrid(anchor, firstDay), [anchor, firstDay])
   const rows = useMemo(() => {

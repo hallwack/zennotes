@@ -1653,6 +1653,7 @@ export function SettingsModal(): JSX.Element {
               value={vaultSettings.dailyNotes.directory}
               placeholder={DEFAULT_DAILY_NOTES_DIRECTORY}
               settingId="daily-notes-directory"
+              commitOnBlur
               onChange={(next) =>
                 void persistVaultSettings({
                   ...vaultSettings,
@@ -1727,6 +1728,7 @@ export function SettingsModal(): JSX.Element {
               value={vaultSettings.weeklyNotes.directory}
               placeholder={DEFAULT_WEEKLY_NOTES_DIRECTORY}
               settingId="weekly-notes-directory"
+              commitOnBlur
               onChange={(next) =>
                 void persistVaultSettings({
                   ...vaultSettings,
@@ -2917,6 +2919,7 @@ function TextInputRow({
   value,
   placeholder,
   settingId,
+  commitOnBlur = false,
   onChange
 }: {
   label: string
@@ -2924,8 +2927,22 @@ function TextInputRow({
   value: string
   placeholder?: string
   settingId?: string
+  commitOnBlur?: boolean
   onChange: (next: string | null) => void
 }): JSX.Element {
+  const [draft, setDraft] = useState(value)
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (!commitOnBlur || !focused) setDraft(value)
+  }, [commitOnBlur, focused, value])
+
+  const commit = (raw: string): void => {
+    const next = raw.trim()
+    if (commitOnBlur && next === value) return
+    onChange(next ? next : null)
+  }
+
   return (
     <div
       className="flex items-center justify-between gap-5 px-5 py-4"
@@ -2936,10 +2953,27 @@ function TextInputRow({
         {description && <div className="mt-1 text-xs leading-5 text-ink-500">{description}</div>}
       </div>
       <input
-        value={value}
+        value={commitOnBlur ? draft : value}
+        onFocus={() => setFocused(true)}
         onChange={(e) => {
-          const next = e.target.value.trim()
-          onChange(next ? next : null)
+          if (commitOnBlur) {
+            setDraft(e.target.value)
+            return
+          }
+          commit(e.target.value)
+        }}
+        onBlur={(e) => {
+          if (!commitOnBlur) return
+          setFocused(false)
+          commit(e.target.value)
+        }}
+        onKeyDown={(e) => {
+          if (!commitOnBlur) return
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Escape') {
+            setDraft(value)
+            e.currentTarget.blur()
+          }
         }}
         placeholder={placeholder}
         className="w-[23rem] max-w-[50vw] rounded-xl border border-paper-300/70 bg-paper-100/80 px-3 py-2 text-sm text-ink-900 outline-none placeholder:text-ink-400 focus:border-accent/45"

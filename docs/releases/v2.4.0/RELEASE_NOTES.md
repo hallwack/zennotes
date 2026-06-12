@@ -13,7 +13,8 @@ The onboarding mode selector now uses a more consistent segmented-control layout
 ## 🐛 Fixes
 
 - **Tabs keep their editor position (#127)** — switching between open note tabs now preserves each note's editor scroll position and cursor/selection. The editor no longer jumps back to line 1 when you scroll in one note, move somewhere else in another note, and return.
+- **Calendar recognizes existing daily notes (#131)** — daily and weekly note detection now uses the same vault-layout rules across the calendar, sidebar, and open/create commands, so synced or manually added date notes show their calendar dots and open without creating duplicates. Daily/weekly directory fields in Settings also wait until blur or Enter before saving, so they no longer snap back to the default while you are clearing or typing a path.
 
 ---
 
-Thanks to everyone filing issues and reporting bugs — closes #127.
+Thanks to everyone filing issues and reporting bugs — closes #127, #131.
