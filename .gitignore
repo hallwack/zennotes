@@ -18,3 +18,5 @@ apps/server/bin
 data/
 /vault/
 /remotevault/
+# Release notes / launch copy are kept local only, never committed.
+docs/releases/
