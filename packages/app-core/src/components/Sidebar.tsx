@@ -4805,7 +4805,6 @@ function IconBtn({
     <button
       type="button"
       onClick={onClick}
-      title={title}
       aria-label={title}
       className={[
         "group relative flex h-7 w-7 items-center justify-center rounded-md transition-colors",
