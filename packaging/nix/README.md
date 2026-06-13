@@ -4,25 +4,24 @@ This directory holds the Nix packaging for ZenNotes.
 
 ## Why this exists
 
-Nix and NixOS users expect software to be installable through declarative package definitions rather than manual downloads.
+NixOS and Nix users expect software to be installable through declarative package definitions rather than manually downloading binaries.
 
-Like the Arch package and Flatpak manifest, this packaging provides a way to install ZenNotes using the distribution's native package management workflow.
+Like the existing AUR and Flatpak packaging, this package uses the official ZenNotes AppImage release and extracts it during the build process. No source rebuild is required.
 
-The package downloads the official AppImage release and extracts it during the build process, avoiding AppImage runtime dependencies such as FUSE.
+The resulting package integrates with the desktop environment, installs application icons, and registers the `zennotes://` URI scheme.
 
 ## How it works
 
-The package definition downloads the official AppImage from GitHub releases and extracts it at build time using Nix's AppImage tooling.
+The package downloads the official AppImage from GitHub Releases and extracts it using Nix's AppImage tooling.
 
-No source rebuild is required.
-
-The extracted application is wrapped and installed into the Nix store together with a desktop entry and icon resources.
+Unlike running the AppImage directly, the extracted application does not require FUSE at runtime.
 
 Files:
 
-* `default.nix` — Nix package definition
+* `default.nix` — package definition
+* `README.md` — packaging documentation
 
-## Build locally
+## Build & install locally
 
 Requires Nix.
 
@@ -32,20 +31,10 @@ cd packaging/nix
 nix-build default.nix
 ```
 
-The resulting application will be available through:
+Run the application:
 
 ```sh
 ./result/bin/zennotes
-```
-
-## Installing on NixOS
-
-Example:
-
-```nix
-environment.systemPackages = [
-  (pkgs.callPackage ./packaging/nix/default.nix { })
-];
 ```
 
 ## Updating to a new release
@@ -54,14 +43,14 @@ environment.systemPackages = [
 cd packaging/nix
 
 # 1. bump `version`
-# 2. update the AppImage hash
-# 3. build and test
+# 2. update the source hash
+# 3. rebuild and smoke-test
 
 nix-build default.nix
 ./result/bin/zennotes
 ```
 
-To calculate a new hash:
+To obtain a new hash:
 
 ```sh
 nix-prefetch-url \
@@ -70,7 +59,7 @@ nix-prefetch-url \
 
 ## Notes & limitations
 
-* The package currently uses the official AppImage release as its source.
-* Automatic updates inside the application are disabled because Nix packages are immutable.
-* Updates are performed by updating the package definition and rebuilding.
-* Currently only `x86_64-linux` is supported because upstream releases only provide an x86_64 AppImage.
+* The package currently supports `x86_64-linux`.
+* The package uses the official AppImage release as its source.
+* Automatic updates inside ZenNotes are disabled because Nix packages are immutable.
+* Updates should be performed through Nix by updating the package definition.
