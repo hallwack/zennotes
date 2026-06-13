@@ -48,7 +48,7 @@ appimageTools.wrapType2 {
     Icon=ZenNotes
     StartupWMClass=ZenNotes
     MimeType=text/markdown;x-scheme-handler/zennotes;
-    Categories=Office;Utility;TextEditor;
+    Categories=Office;TextEditor;
     EOF
 
     cp -r ${appImageContents}/usr/share/icons $out/share
