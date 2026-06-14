@@ -6,25 +6,54 @@ This directory holds the Nix packaging for ZenNotes.
 
 NixOS and Nix users expect software to be installable through declarative package definitions rather than manually downloading binaries.
 
-Unlike the existing AUR and Flatpak packaging, this package builds the official ZenNotes desktop app from source because using AppImages is undesired on Nix as it bloats the nix store. 
+Unlike the existing AUR and Flatpak packaging, this package builds the official ZenNotes desktop app from source because using AppImages is undesired on Nix as it bloats the nix store.
 
-## Build locally
+## Test it before installing
 
-Requires Nix.
+You can use `nix run` to run the application without installing it:
 
+For the desktop app:
 ```sh
-nix-build -E 'with import <nixpkgs> {}; callPackage ./package-desktop.nix {}'
+nix run github:ZenNotes/zennotes
 ```
 
-Run the application:
-
+For the server:
 ```sh
-./result/bin/zennotes-desktop
+nix run github:ZenNotes/zennotes#zennotes-server
 ```
 
 ## Installing on NixOS
 
-For now as the package is not in the official nixpkgs repo and there is no `flake.nix` you will need to copy the `package-desktop.nix` file into your NixOS configuration and add it to your system packages:
+For now as the package is not in the official nixpkgs repo you will need to add an input in your `flake.nix`, like this:
+
+```nix
+inputs = {
+  # ...
+
+  zennotes.url = "github:ZenNotes/zennotes";
+};
+
+outputs = { nixpkgs, ... } @ inputs:
+{
+  # ...
+};
+```
+
+And then you can add it to your system packages:
+
+```nix
+{ pkgs, inputs, ... }:
+
+{
+  environment.systemPackages = [
+    inputs.zennotes.packages.${pkgs.system}.zennotes-desktop
+    inputs.zennotes.packages.${pkgs.system}.zennotes-server
+  ];
+}
+```
+
+
+If you don't use flakes you'll need to copy the `package-desktop.nix` file into your NixOS configuration and add it to your system packages:
 
 ```nix
 environment.systemPackages = [
@@ -86,8 +115,13 @@ prefetch-npm-deps package-lock.json
 4. Build and test
 
 ```sh
-nix-build -E 'with import <nixpkgs> {}; callPackage ./package-desktop.nix {}'
+nix build
 ./result/bin/zennotes-desktop
+```
+
+```sh
+nix build .#server
+./result/bin/zennotes-server
 ```
 
 ## Notes & limitations
