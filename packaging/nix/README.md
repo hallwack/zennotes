@@ -2,12 +2,6 @@
 
 This directory holds the Nix packaging for ZenNotes.
 
-## Why this exists
-
-NixOS and Nix users expect software to be installable through declarative package definitions rather than manually downloading binaries.
-
-Unlike the existing AUR and Flatpak packaging, this package builds the official ZenNotes desktop app from source because using AppImages is undesired on Nix as it bloats the nix store.
-
 ## Test it before installing
 
 You can use `nix run` to run the application without installing it:
