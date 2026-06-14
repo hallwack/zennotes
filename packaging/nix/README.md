@@ -6,43 +6,50 @@ This directory holds the Nix packaging for ZenNotes.
 
 NixOS and Nix users expect software to be installable through declarative package definitions rather than manually downloading binaries.
 
-Unlike the existing AUR and Flatpak packaging, this package builds the official ZenNotes desktop app from source. Since using AppImages is undesired on Nix as it bloats the nix store. 
+Unlike the existing AUR and Flatpak packaging, this package builds the official ZenNotes desktop app from source because using AppImages is undesired on Nix as it bloats the nix store. 
 
 ## Build locally
 
 Requires Nix.
 
 ```sh
-nix-build -E 'with import <nixpkgs> {}; callPackage ./package.nix {}'
+nix-build -E 'with import <nixpkgs> {}; callPackage ./package-desktop.nix {}'
 ```
 
 Run the application:
 
 ```sh
-./result/bin/zennotes
+./result/bin/zennotes-desktop
 ```
 
 ## Installing on NixOS
 
-For now as the package is not in the official nixpkgs repo you will need to copy the `package.nix` file into your NixOS configuration and add it to your system packages:
+For now as the package is not in the official nixpkgs repo and there is no `flake.nix` you will need to copy the `package-desktop.nix` file into your NixOS configuration and add it to your system packages:
 
 ```nix
 environment.systemPackages = [
-  (pkgs.callPackage ./package.nix { })
+  (pkgs.callPackage ./package-desktop.nix { })
+];
+```
+
+Same goes for the server package:
+
+```nix
+environment.systemPackages = [
+  (pkgs.callPackage ./package-server.nix { })
 ];
 ```
 
 ## Updating to a new release
 
-1. Bump `version`:
+1. Open `release-data.json`
+2. Bump `version`:
 
-```nix
-# package.nix
-# ...
-buildNpmPackage (finalAttrs: {
-  pname = "zennotes-desktop";
-  version = "2.3.0"; # => "2.4.0"
-  # ...
+```json
+{
+  "version": "2.3.0", // => 2.4.0
+  // ...
+}
 ```
 
 2. Update the source hash
@@ -52,39 +59,35 @@ To obtain a new hash (replace X.X.X with the desired version):
 nix-prefetch-github ZenNotes zennotes --rev "vX.X.X"
 ```
 
-```nix
-  # package.nix
-  # ...
-  src = fetchFromGitHub {
-    owner = "ZenNotes";
-    repo = "zennotes";
-    tag = "v${finalAttrs.version}";
-    hash = "sha256-+tLPVnnMbtMa5blSwHav9ZMlnkUsrdG62mMGxhbmy6g="; # Update the hash
-  };
-  # ...
+```json
+{
+  // ...
+  "hash": "sha256-+tLPVnnMbtMa5blSwHav9ZMlnkUsrdG62mMGxhbmy6g=", // update to new hash
+  // ...
+}
+
 ```
 
-3. Update the npmDepsHash (if needed)
-To obtain a new hash use this command in an updated project root:
+3. Update the npmDepsHash (if needed) and vendorHash (if needed)
+To obtain a new npmDepsHash use this command in an updated project root:
 
 ```sh
 prefetch-npm-deps package-lock.json
 ```
 
-```nix
-  # package.nix
-  # ...
-  npmDepsHash = "sha256-7IpGnxVjaJvfSZyKjOylGMhFqa1bx8Ry5O1yqYfNnCE="; # Update the hash
-
-  npmWorkspace = "apps/desktop";
-  # ...
+```json
+{
+  // ...
+  "npmDepsHash": "sha256-7IpGnxVjaJvfSZyKjOylGMhFqa1bx8Ry5O1yqYfNnCE=",
+  "vendorHash": "sha256-wYBF7CjM6AvoWMWql9hFmIaj6pCmli4vOef6POyGkfU="
+}
 ```
 
 4. Build and test
 
 ```sh
-nix-build -E 'with import <nixpkgs> {}; callPackage ./package.nix {}'
-./result/bin/zennotes
+nix-build -E 'with import <nixpkgs> {}; callPackage ./package-desktop.nix {}'
+./result/bin/zennotes-desktop
 ```
 
 ## Notes & limitations
